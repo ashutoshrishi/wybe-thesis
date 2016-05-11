@@ -1,0 +1,68 @@
+\chapter{Wybe Build System}
+
+Wybemk is the wybe compiler and wybe make system joined together in one
+utility. The wybemk compiler just needs the name of a target to build, and it
+will decide the building and linking order. Targets include architecture object
+files, LLVM bitcode files, or a final linked executable. 
+
+Similar to the gnu make utility, it does not want to rebuild any object file
+which is already built. Taking it one step further, the object files wybemk
+makes store useful LPVM information generated from the source code. While a
+normal object file does present it's name table, allowing the functions stored
+in it to be called as extern functions, these functions are not
+inlineable. While source code for functions can be stored in a section of the
+object file, it is easier to just pass the original source file around with the
+object file. The LPVM structure of a parsed source file however is simpler in
+its structure. A body of a function is simply a list of clauses. Storing this
+information in the object file enables inlining in at the LPVM generation
+stage. Inlining also presents a wider view for analysis as we can look at the
+body of the functions we want to call externally. 
+
+Storing a serialised form of LPVM in the object file is quite similar to the
+LLVM bitcode files, which stores the LLVM IR in a byte file. To keep this
+option open, since we use LLVM as the final stage, we also present a wrapped
+LLVM bitcode structure which stores both the LLVM and LPVM IR in it. Such a
+file can be linked in by wybemk or by the LLVM compiler, which loads different
+information from the file.
+
+
+\section{Storing structures in Object files}
+
+Object files store relocatable object code which is the compiled code generated
+by the LLVM compiler in the wybe compiler. Even though different architectures
+have their own specification of the object file format, they are modelled
+around the same basic structure. Object files defines segments, which are
+mapped as memory segments during linking and loading. The segment TEXT usually
+contains the instructions. An object file also lists the symbols defined in it,
+which is useful for the linker to resolve external function calls from another
+module being linked. Avoiding all the common segment names, it is possible to
+add new segments to the object file (at the correct bytes), which do not get
+mapped to memory. Using such such segment we can attempt storage of some useful
+serialised meta-data in the object file.
+
+To emulate the behaviour of gnu make, or to avoid rebuilding an object file, it
+is quite trivial to check the file creation date and reach a decision. However
+this hinders a lot of LPVM level optimisation. Since there is no need to
+compile a source module if it has a newer object file for it, we can't do any
+inter-module analysis with it. We can get the symbol names and possibly the
+generated object code for the function names, but those are not useful for LPVM
+analyses. Storing generated LPVM code in the object files would circumvent
+this. The simple semantics of LPVM is an excellent candidate for storage in
+object files without being disruptive. Even when the source code file is
+present, loading the LPVM code from the object file is faster than engaging the
+parser and generating LPVM from the parse tree.
+
+LLVM also generates bitcode files. These files store a serialised form of the
+generated LLVM IR. The LLVM compiler can transform these to the machine local
+object file too. Being a simple bitstream format, it is possible to include
+other serialised metadata into this file as long as the LLVM compiler can find
+its required IR. Storing LPVM in these files is a feasible alternative to the
+machine local object file formats. LLVM bitcode file can be used for code
+generation on any valid target, much like the Java bytecode. 
+
+\section{LPVM as a stored structure}
+
+
+\section{Loading Inalienable LPVM}
+
+

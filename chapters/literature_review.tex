@@ -1,0 +1,53 @@
+\chapter{Literature Review}
+
+
+\section{Horn Clauses as an Intermediate Representation}
+
+The paper describes a new form of IR using a logical programming structure, now
+called LPVM. The wybe compiler presents an implementation of this clausal form
+and as such LPVM is a core part of its pipeline. This thesis provides the final
+code generation stage for LPVM and wybe.
+
+LPVM is an attempt to make program analysis and transformation easier. It's an
+alternative to the common imperative IR forms while maintaining a similar set
+of program analysis methods. The paper compares LPVM against the other current
+options for an IR, like the three address code and SSA, discussing the
+drawbacks of these common IRs. The focus is on solving these drawbacks at a
+more fundamental level rather than relying on further transformations. The
+motivation outlined in the paper is having a simple limited structure in
+analysis, while drawing in existing logical programming reasoning. The limited
+set of primitives, additionally enables the wybe compiler to be more efficient
+by embedding a LPVM transformation in the object file. This would have been
+inefficient with a more complex structure.
+
+The Three Address Code (TAC) IR and its refinement, the Static Single
+Assignment (SSA) form, are popular IRs used in compiler constructions. They are
+simple enough to be universal and are quite extensible to accommodate different
+source language semantics due to their little restrictions. A SSA based IR will
+generally be laid out as basic blocks and branching instructions connecting
+them, like a graph. SSA requires all variable names to be unique in a
+block. This restriction makes it easier to track variable lifelines. But this
+also requires a virtual function called phi to choose the value of the same
+variable coming in from two different blocks. The paper points out that this is
+inadequate for determining the control flow path. While the phi function can
+tell us which blocks are providing the values for the same variable during
+analysis, it won't tell us the condition that was evaluated for that
+decision. This can be done by looking into all the predecessor blocks that
+provided the value. Another solution to this, as pointed out by the paper, is
+using the Gated Single-Assignment (GSA) form which augments the existing phi
+function to capture the block entering condition.
+
+The next issue the paper describes is the SSA form being biased to forward
+analysis. The phi function at the top of a block is helpful for analysing that
+block locally. A predecessor block (to the block with phi) just knows about its
+branching destination, and not about the phi function choosing between its
+variables and other blocks. Another transformation to the standard SSA form,
+called the Static Single Information (SSI), as pointed to by the paper, adds
+another virtual function to the end of the blocks to fill this information
+gap. 
+
+
+
+
+
+
