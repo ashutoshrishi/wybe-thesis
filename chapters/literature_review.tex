@@ -42,9 +42,19 @@ analysis. The phi function at the top of a block is helpful for analysing that
 block locally. A predecessor block (to the block with phi) just knows about its
 branching destination, and not about the phi function choosing between its
 variables and other blocks. Another transformation to the standard SSA form,
-called the Static Single Information (SSI), as pointed to by the paper, adds
-another virtual function to the end of the blocks to fill this information
-gap. 
+called the Static Single Information (SSI), as pointed to by the paper, solves
+this problem. It adds another virtual function to the end of the blocks to fill
+this information gap. 
+
+So far every drawback of SSA has been addressed by other projects by creating
+an extension to the SSA structure. While all of these are perfectly feasible,
+they are additional complexities. In the case of LPVM these problems are solved
+at the base structural level, without any special functions. It identifies the
+drawback of SSA to lie in its naming rules. 
+
+
+
+
 
 
 
