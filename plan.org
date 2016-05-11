@@ -1,0 +1,36 @@
+* Writing
+** Components
+*** Abstract & other front matter.
+*** Introduction.
+*** Background & literature review. 
+**** Reviews todo
+- LPVM Paper
+- Incremental Compilation
+*** Contribution.
+*** Results and analysis.
+*** Discussion.
+*** Conclusion.
+*** Bibliography & appendices.
+
+** Outline
+*** Literature Review
+Main papers
+- The LPVM Paper
+- Why logical intermediate language is useful, can be useful
+- The Incremental Compilation paper
+- LLVM papers
+*** LPVM !!
+*** LLVM Review, LLVM suitability for LPVM
+*** Packing stuff in Object files
+*** Incremental Compilation
+*** LLVM Optimisations, garbage collection
+*** Reviewing popular build systems
+- As compared to our strategy of building wybe targets
+- Wybe compiler doubles as a automatic make tool
+*** MUse about supporting multilingual applications/Linking
+- Foreign calls
+- linking other foreign code
+*** Non code targets
+- Cross references
+- Like generating documentation
+
