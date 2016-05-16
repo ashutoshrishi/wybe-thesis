@@ -25,38 +25,90 @@ Assignment (SSA) form, are popular IRs used in compiler constructions. They are
 simple enough to be universal and are quite extensible to accommodate different
 source language semantics due to their little restrictions. A SSA based IR will
 generally be laid out as basic blocks and branching instructions connecting
-them, like a graph. SSA requires all variable names to be unique in a
-block. This restriction makes it easier to track variable lifelines. But this
-also requires a virtual function called phi to choose the value of the same
-variable coming in from two different blocks. The paper points out that this is
-inadequate for determining the control flow path. While the phi function can
-tell us which blocks are providing the values for the same variable during
-analysis, it won't tell us the condition that was evaluated for that
-decision. This can be done by looking into all the predecessor blocks that
+them, like a graph. The SSA refinement requires all variable names to be unique
+in a block. This makes it easier to track variable lifelines. But
+this also requires a virtual function called phi to choose the value of the
+same variable coming in from two different blocks. The paper points out that
+this is inadequate for determining the control flow path. While the phi
+function can tell us which blocks are providing the values for the same
+variable during analysis, it won't tell us the condition that was evaluated for
+that decision. This can be done by looking into all the predecessor blocks that
 provided the value. Another solution to this, as pointed out by the paper, is
 using the Gated Single-Assignment (GSA) form which augments the existing phi
 function to capture the block entering condition.
 
-The next issue the paper describes is the SSA form being biased to forward
+Another drawback described is the SSA form being biased to forward
 analysis. The phi function at the top of a block is helpful for analysing that
 block locally. A predecessor block (to the block with phi) just knows about its
 branching destination, and not about the phi function choosing between its
-variables and other blocks. Another transformation to the standard SSA form,
-called the Static Single Information (SSI), as pointed to by the paper, solves
-this problem. It adds another virtual function to the end of the blocks to fill
-this information gap. 
+variables and other blocks. A transformation to the standard SSA form, called
+the Static Single Information (SSI), provides a solution to this problem by
+adding another virtual function to the end of the blocks which describes the
+variables that will be compare with other blocks in the subsequent block.
 
-So far every drawback of SSA has been addressed by other projects by creating
-an extension to the SSA structure. While all of these are perfectly feasible,
-they are additional complexities. In the case of LPVM these problems are solved
-at the base structural level, without any special functions. It identifies the
-drawback of SSA to lie in its naming rules. 
+So far every drawback of SSA has been addressed can be solved by creating an
+extension to the SSA structure. While these are perfectly feasible, they are
+additional complexities. In the case of LPVM these problems are solved at the
+basic structural level, without any special functions. During analysis, the
+special functions of SSA have to be resolved with extra work. An analysis of a
+block containing phi node involves revisiting the analysis work done for the
+predecessor blocks. This is a result of SSA's naming rules. Even
+though SSA enforces unique names for every declaration, alternate blocks can
+still have the same variable names. A more functional translation of SSA
+avoids this, but still exhibits the forward bias problem.
+
+% Don't just summarise the drawbacks, don't need to, just say its there and
+% discussed, LPVM does better at a structural level. And its important to
+% understand these common drawbacks since SSA is pop-u-lar.
+
+% Explanation of the LP form
+The LPVM IR is a restricted form of a logical language. It does not feature
+non-determinism seen commonly in a LP. Therefore all input parameters have to
+be bound to a value before calling that procedure. It also requires fixing the
+mode of a parameter. In LP, a procedure can have a parameter which can behave
+as an input or an output. LPVM requires this behaviour to the explicit and
+fixed for every parameter for easier reasoning. These restrictions makes LPVM
+surprisingly easy to read.
+
+% Present a simple explanation of horn clauses
+At the top level LPVM form there are only procedures. In the form presented in
+the paper a procedure consists multiple \textit{Horn Clauses}. A horn clause
+with its \textit{Head} describing its parameters and procedure name, and the
+sequence of goals as the body can be seen as a procedure itself. Since LPVM
+wants to be deterministic, only one of the clauses with the same name evaluated
+for given inputs. That clause can be seen as the entire procedure itself with
+the \textit{Head} as the procedure signature, without bothering about the usual
+backtracking in LP. The parameters to a clause also needs its modes to be
+explicitly defined: either as an input or an output. There may be two
+alternative \textit{Clauses} of the same name having switched up modes for the
+same parameters. Since determinism will select only one of them as the
+procedure, single modedness is preserved.
+
+The \textit{Goals} are simple body statements. Logical statements in SSA result
+in block cause branching. These statements are represented as guard goals in
+LPVM. When a guard goal is encountered, a new clause will be created with the
+same goal sequence until that guard, but will follow the complimentary
+evaluation of the guard after that. In the implementation however, the
+procedure body or the clause body or the sequence of goals are put in a tree
+data structure. Instead of having somewhat duplicated sequence of goals in
+creating an alternate clause, the guard goals instead create branching child
+nodes, each with further sequence of goals. This is similar to the layout of
+basic blocks within a function in SSA, which makes it easier to translate the
+LPVM to any SSA based IR later for code generation. 
+
+At the end of conversion to LPVM, the IR form only contains procedures with
+multiple clauses. Alternate branches of conditionals are incorporated in their
+own clauses, chosen by the evaluation of a guard statement. Unconditional jumps
+are procedural calls and loops are flattened to recursive procedure
+calls. Every procedure will also define all its input and output parameters
+explicitly in its signature. Since output variables are specified here, there
+is no need of a return instruction. The only variables that would exist in the
+clause bodies are now the specified input and output variables, and temporaries
+between them. This declarative paradigm greatly simplifies a lot of
+analyses. This also helps determine the purity of a procedure. 
 
 
-
-
-
-
+\section{Current Implementation of LPVM}
 
 
 
