@@ -111,7 +111,53 @@ analyses. This also helps determine the purity of a procedure.
 \section{Current Implementation of LPVM}
 
 
+\begin{figure}
+\centering
+\begin{tabular}{l@{\hskip 1in} l}
+  \( x0 = x1 + x3 \)              & \( wybe.int.+(x1, x3, ?x0) \) \\
+  \( if\ (x0 > 0)\ left\ right \) & \( wybe.int.>(x0,\ 0,\ ?tmp1) \) \\
+                                  & \( case\ tmp1\ of \) \\
+                                  & \( 0:\ left.. \) \\
+                                  & \( 1:\ right.. \) \\
+                                
 
+\end{tabular}
+\\
+\caption{SSA statement and their equivalent LPVM goals}
+\end{figure}
+
+\begin{figure}
+\centering
+\begin{tabular}{l c l}
+\( Proc \)   & \( \rightarrow \) & \( Clause* \) \\
+\( Clause \) & \( \rightarrow \) & \( Proto\ Body \) \\
+\( Proto \)  & \( \rightarrow \) & \( Name\ Param* \) \\
+\( Param \)  & \( \rightarrow \) & \( Name\ Type\ Flow \) \\
+\( Body \)   & \( \rightarrow \) & \( Prim*\ Fork \) \\
+\( Prim \)   & \( \rightarrow \) & \( PrimCall\ |\ PrimForeign \) \\
+\( Fork \)   & \( \rightarrow \) & \( Var\ Body* \) \\
+\end{tabular}
+\caption{LPVM Implementation Data Type}
+\end{figure}
+
+In the LPVM implementation used by the Wybe compiler every goal is a primitive
+procedure call. At the most basic level these are similar to primitive machine
+instructions. This again simplifies code generation. As mentioned above,
+instead of having duplication of clause bodies the guard goals currently result
+in a fork of bodies. Generation of two complementary clauses similar to the
+LPVM specifications in the paper is trivial from this tree structure.
+
+All loops and conditionals are un-branched by generating new procedures which
+are involved in recursion. The calls are tail calls and hence the code
+generation will have to ensure tail call optimisation is enabled. Simple
+conditionals like if conditions, just generate a fork in the body. The
+alternate destinations, say \textit{Body A} and \textit{Body B}, are stored in a
+list in the \textit{Fork}. Since the \textit{Fork} is at the end of a clause
+\textit{Body}, the remaining body (after the If statement) is placed in a new
+generated procedure. This generated procedure is called at the end of
+\textit{Body A} and \textit{Body B}.
+
+% Explain Loops 
 
 
 
