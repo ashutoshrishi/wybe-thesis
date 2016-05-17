@@ -1,0 +1,83 @@
+\chapter{Wybe programming Language}
+
+
+\begin{figure}
+\centering
+\begin{tabular}{r c l}
+
+\( func\ factorial(n:int):int \) & \(\rightarrow \) & 
+\( proc\ factorial(n:wybe.int, ?\verb+$+:wybe.int) \) \\
+\( ?c = bar(a, b) \) & \(\rightarrow\) & \( bar(a, b, ?c) \) \\
+\( ?y = f(g(x)) \) & \(\rightarrow\) & \( g(x, ?temp)\ f(temp, ?y) \) \\
+
+
+\end{tabular}
+\\
+\caption{Normalisation of Wybe functions to Procedures.}
+\label{fig:wybe_convert_to_proc}
+\end{figure}
+
+
+
+Wybe is a new programming language that exhibits both declarative and
+imperative features. It aims to include the good parts of both and still be
+simple to learn. Features of Wybe include enforcement of interface integrity,
+statically typed, and LP like procedures. Interface integrity involves
+depicting all the inputs and outputs, along with side-effects in the function
+or procedure prototype. This makes studying the effects of a function quite
+easy and apparent just through its prototype. A Wybe procedure will pass
+modifiable resources in and out just like normal parameters. Wybe syntax is
+still undergoing modifications every now and then, with new features also being
+added. 
+
+A Wybe module is equivalent to a wybe source file. The module name is same as
+the source file without the extension. The module's interface consists of the
+public functions and procedures in the module. There is also a separate syntax
+to declare sub-modules inside the full file module. Sub-module names are
+qualified with the outer modules' name. For example a module \textit{A.B.C} is
+the sub-module of \textit{A.B}, which is a sub-module of \textit{A}, which is
+the module of the source file \textit{A.wybe}. Defining new types also creates
+a new sub-module. 
+
+
+
+
+
+\section{Compilation of Wybe}
+
+The Wybe source code is converted to the LPVM IR. In this process it undergoes
+flattening, type checking, un-branching, and a final clause generation pass to
+obtain a structure similar to Figure~\ref{fig:lpvm_data_type}. Variables in
+Wybe can be adorned to explicitly define their direction of information flow. A
+variable can flow in (x), flow out (?x), or both ways (!x). The Wybe procedure
+structure is quite similar to LPVM procedures, making LPVM a good fit for this
+language. Everything is modelled as a procedure quite early in the compiler
+pipeline. Alongside procedures, functions do exist. Although they are
+normalised to look like a procedure definition along with the flattening step
+by the compiler. The output of the function is simply added as a output
+parameter in its procedure form. Expressions are dealt with in a similar way.
+Some common conversions are shown in Figure~\ref{fig:wybe_convert_to_proc}.
+
+Since LPVM primitives are just procedure calls, all Wybe statements are
+gradually reduced to procedure calls too. These primitive procedure calls can
+be calls to other procedures in the module or imported modules (fully qualified
+procedure names), or be foreign calls. The foreign calls are used to indicate
+linking of a foreign object file and its code, for example, the standard
+library makes foreign calls to C, to access system IO. Even though these are
+standard procedure calls to LPVM, it will later become an extern call in LLVM
+to a shared object file. The only difference between a local and a foreign
+procedure call is that the local calls can be in-lined. Otherwise it is just
+another \textit{Prim} in a clause body.
+
+Wybe procedures can be polymorphic. Multiple Wybe procedures can have the same
+name but with different paramter types and modes. This enables procedures with
+multiple modes, similar to Prolog. For example, a procedure to add two numbers
+can have the following definitions: \textit{add(x, y, ?z)}, \textit{add(x, ?y,
+  z)}, \textit{add(?x, y, z)}. The call \textit{add(3, ?t, 5)} will evaluate
+\textit{t} to be \textit{2}. This selection is done in the Type checking pass,
+which matches calls to the definition with the correct types and modes. 
+
+The un-branching pass is when LPVM replaces the remaining conditionals and
+loops with recursion, as shown in the last chapter. 
+
+
