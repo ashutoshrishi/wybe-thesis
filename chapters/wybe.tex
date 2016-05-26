@@ -17,31 +17,30 @@
 \label{fig:wybe_convert_to_proc}
 \end{figure}
 
-
+% Figure for showing the INT module
 \begin{figure}
 
-
-\textit{public type} \textbf{int} \textit{is} \textbf{i64} \\
+\textit{public type} \textbf{int} \textit{is} \textbf{i64}
 
 \begin{itemize}[label={}]
-
+\setlength\itemsep{0em}
 \item
 \textit{public func} 
-\textbf{+}(x:int,y:int):int = foreign llvm add(x,y)
+\textbf{+}(x: int, y: int) : int = foreign llvm add(x,y)
 
 \item  
 \textit{public proc} 
-\textbf{+}(?x:int,y:int,z:int) ?x = foreign llvm sub(z,y) 
+\textbf{+}(?x: int, y: int, z: int) ?x = foreign llvm sub(z,y) 
 \textit{end}
 
 \item 
 \textit{public proc} 
-\textbf{+}(x:int,?y:int,z:int) ?y = foreign llvm sub(z,x) 
+\textbf{+}(x: int, ?y: int, z: int) ?y = foreign llvm sub(z,x) 
 \textit{end}
 
 \item 
 \textit{public func} 
-\textbf{=}(x:int, y:int):bool = foreign llvm icmp eq(x,y)
+\textbf{=}(x: int, y: int) : bool = foreign llvm icmp eq(x,y)
 \end{itemize}
 
 \textit{end} \\
@@ -49,6 +48,34 @@
 \caption{Sample of the wybe.int module from Wybe standard library}
 \label{fig:wybe_int}
 \end{figure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+% Figure for showing the bool type
+\begin{figure}
+\vskip 2em
+\textit{public type} \textbf{bool} = 
+\textit{public} \textbf{false} \verb!|! \textbf{true}
+\begin{itemize}[label={}]
+\setlength\itemsep{0em}
+
+    
+\item
+\textit{public func} \textbf{=}(x: bool, y: bool) : bool = 
+\textit{foreign} \textit{llvm} icmp eq(x,y)
+
+\item
+\textit{public func} \textbf{/=}(x: bool, y: bool) : bool = 
+\textit{foreign} \textit{llvm} icmp ne(x,y)
+\end{itemize}
+\textit{end}
+
+\caption{Bool type as an Algebraic Data Type from the Wybe standard library}
+\label{fig:wybe_bool}
+\end{figure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 
 
 Wybe is a new multi-paradigm programming language, featuring both imperative
@@ -83,15 +110,20 @@ level \textit{use module} statements in the source file.
 
 Types in Wybe are simply modules. Standard Wybe considers {int},
 \textit{float}, \textit{char}, \textit{string} as primitive types. In reality
-these are just types provided by the Wybe standard library, which can be
+these are just types provided by the Wybe standard library module, which can be
 replaced with any other flavour of a standard library. Defining basic types
 requires just specifying its memory layout (in terms of word sizes) and
 providing procedures or functions to interact with the basic type. A sample
 from the \textit{wybe.int} type module is shown in Figure~\ref{fig:wybe_int}. This
 type definition is in the source file \textit{wybe.wybe}, making \textit{int} a sub-module
-of the module \textit{wybe}. 
+of the module \textit{wybe}. This \textit{int} type sets the size of its
+members to be \textit{i64}, a syntax borrowed from LLVM, occupying 64 bits. 
 
-Wybe also supports \textit{algebraic data types}.
+More compound types can be defined in terms of basic types or other compound
+types. Wybe has \textit{algebraic data types}. The \textit{bool} type can in
+this way with two type constructors, as shown in
+Figure~\ref{fig:wybe_bool}. The compiler will infer the storage for members of
+this type. 
 
 
 Procedures (and even functions) in Wybe can be polymorphic. Multiple Wybe
@@ -154,12 +186,18 @@ module for \textit{int} and the type module for \textit{string}. The type
 checker will choose one depending on the context. A statement comparing two
 \textit{int} (inferred) variables the call \textit{proc call =(a, b, ?c)}, will
 be converted to \textit{proc call wybe.int.=(a:wybe.int, b:wybe.int,
-  ?c:wybe.int)}. 
+  ?c:wybe.int)}. By the end of a successful type checking, every flattened
+procedure call and variable types names will have an annotation of the fully
+qualified module that defines it.
 
 
 \subsection{Un-branching Pass}
 
-The un-branching pass is when LPVM replaces the remaining conditionals and
-loops with recursion, as shown in the last chapter. 
+The un-branching pass is where all conditional branches and loops are replaced
+with procedure calls and recursion respectively. This is the structure defined
+by LPVM. At this stage, a flattened Wybe procedure may create one or more
+generated procedures to act as branching blocks, as described in the chapter on
+LPVM. 
+
 
 

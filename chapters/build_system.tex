@@ -1,29 +1,55 @@
-\chapter{Wybe Build System}
+\chapter{Wybemk, Compiler and Build System}
 
-Wybemk is the wybe compiler and wybe make system joined together in one
-utility. The wybemk compiler just needs the name of a target to build, and it
-will decide the building and linking order. Targets include architecture object
-files, LLVM bitcode files, or a final linked executable. 
+Wybemk is the incremental compiler and a Make utility combined together in one
+executable for Wybe source code. It is modelled after the GNU Make utility, but
+doesn't need an explicit Makefile to make Wybe source files. The Wybemk
+compiler just needs the name of a target to build, and it will infer the
+building and linking order. Targets include architecture dependant relocatable
+object files, LLVM bitcode files, or a final linked executable. The object
+files and bitcode files that Wybemk builds are a little different than what
+other utilities create. They have embedded information that assists the future
+compilation processes in being incremental. It is this embedding that allows
+Wybemk to be an incremental and work-saving compiler.
 
-Similar to the gnu make utility, it does not want to rebuild any object file
-which is already built. Taking it one step further, the object files wybemk
-makes store useful LPVM information generated from the source code. While a
-normal object file does present it's name table, allowing the functions stored
-in it to be called as extern functions, these functions are not
-inlineable. While source code for functions can be stored in a section of the
-object file, it is easier to just pass the original source file around with the
-object file. The LPVM structure of a parsed source file however is simpler in
-its structure. A body of a function is simply a list of clauses. Storing this
-information in the object file enables inlining in at the LPVM generation
-stage. Inlining also presents a wider view for analysis as we can look at the
-body of the functions we want to call externally. 
+The elementary work saving features are very similar to what the GNU Make does.
+It does not want to rebuild any object file which is already built and is newer
+than its corresponding source file. But by doing so, the LPVM form and analysis
+for that module is also skipped. This is acceptable for only intra module
+optimisations, since the final optimised object code will be the same. But we
+might be missing a lot of inter module optimisation opportunities and LPVM
+inlining that other dependant modules can reap benefits from. Object files
+store a symbol table which will list all the callable function names in
+it. This is what the \textit{linker} uses to resolve extern calls during
+linking. The body of these functions are stored in object code form. We can't
+make a decision on inlining these functions into another module from this. It
+would be nice to have the LPVM form of all the modules participating in a
+compilation process for these optimisation decisions. We want to store LPVM
+analysis information in the object files so that when they are not going to be
+re-compiled, we can at least pull in the LPVM form of that module in the
+compilation pipeline.
 
-Storing a serialised form of LPVM in the object file is quite similar to the
-LLVM bitcode files, which stores the LLVM IR in a byte file. To keep this
-option open, since we use LLVM as the final stage, we also present a wrapped
-LLVM bitcode structure which stores both the LLVM and LPVM IR in it. Such a
-file can be linked in by wybemk or by the LLVM compiler, which loads different
-information from the file.
+The limited structure of LPVM makes serialising and embedding its byte
+structure into a object file byte string easy and feasibile. We could have also
+stored the parse tree, but a parse tree has a wider form and is redundant with
+the source code. With storing the parse tree we are only skipping the work the
+parser does and would have to redo all the LPVM transformation and
+analysis. This would be more work. The simple yet highly informational form of
+LPVM makes it an ideal structure to pass around.
+
+
+Why object files though? An object files' structure is architecture dependant
+and requires different efforts for storing and loading information for each
+architecture. This would put a constraint on the number of architectures that
+Wybemk can operate on eventhough with LLVM it should be able to possibly
+generate code for those architectures. However object files are a common
+container for relocatable machine code. Most compilers traditionally build a
+object file for the linker to link. Currently Wybemk does not want to reinvent
+that format and we would like our incrementality features to work in tandem
+with the common choices. Apart from object files however, the Wybemk compiler
+can do the same embedding with LLVM bitcode files. LLVM bitcode files can be
+treated as architecture neutral, and since we use a LLVM compiler as a final
+stage, we can use bitcode files as a replacement for architecture dependant
+object files too. 
 
 
 \section{Storing structures in Object files}
@@ -32,40 +58,80 @@ Object files store relocatable object code which is the compiled code generated
 by the LLVM compiler in the wybe compiler. Even though different architectures
 have their own specification of the object file format, they are modelled
 around the same basic structure. Object files defines segments, which are
-mapped as memory segments during linking and loading. The segment TEXT usually
-contains the instructions. An object file also lists the symbols defined in it,
-which is useful for the linker to resolve external function calls from another
-module being linked. Avoiding all the common segment names, it is possible to
-add new segments to the object file (at the correct bytes), which do not get
-mapped to memory. Using such such segment we can attempt storage of some useful
-serialised meta-data in the object file.
+mapped as memory segments during linking and loading. A special segment called
+\textit{TEXT} usually contains the instructions. An object file also lists the
+symbols defined in it, which is useful for the linker to resolve external
+function calls from another module being linked. Avoiding all the common
+segment names, it is possible to add new segments to the object file (at the
+correct byte offset), which do not get mapped to memory. These are zero address
+segments. Using such such segment we can attempt storage of some useful
+serialised meta-data in the object file. 
 
-To emulate the behaviour of gnu make, or to avoid rebuilding an object file, it
-is quite trivial to check the file creation date and reach a decision. However
-this hinders a lot of LPVM level optimisation. Since there is no need to
-compile a source module if it has a newer object file for it, we can't do any
-inter-module analysis with it. We can get the symbol names and possibly the
-generated object code for the function names, but those are not useful for LPVM
-analyses. Storing generated LPVM code in the object files would circumvent
-this. The simple semantics of LPVM is an excellent candidate for storage in
-object files without being disruptive. Even when the source code file is
-present, loading the LPVM code from the object file is faster than engaging the
-parser and generating LPVM from the parse tree.
+Our current implementation has the functionality to parse and embed information
+in \macho object files. The \macho file format is the Application Binary
+Interface (ABI) format that the OS X operating system uses for its object
+files. An ABI describes the byte ordering and their meaning for the operating
+system in this case. 
 
-LLVM also generates bitcode files. These files store a serialised form of the
-generated LLVM IR. The LLVM compiler can transform these to the machine local
-object file too. Being a simple bitstream format, it is possible to include
-other serialised metadata into this file as long as the LLVM compiler can find
-its required IR. Storing LPVM in these files is a feasible alternative to the
-machine local object file formats. LLVM bitcode file can be used for code
-generation on any valid target, much like the Java bytecode. 
+\subsection{Mach-O Object File Format}
 
-\section{LPVM as a stored structure}
+The first 32 bits or 4 bytes are considered to be the magic number if read in
+little endian format. The magic number constant determines what kind of ABI the
+rest of the bytes of the file follow and their ordering. On OS X we can have 32
+bit and 64 bit \macho object files and Universal binaries. Universal binaries
+or Fat archives contain more than one object file. Wybemk is interested in
+\macho object files.
 
-The simplicity of LPVM makes it effecient...
+% TODO Decide what to actually write here
+% TODO Things to mention: 
+% o What we are actually serialising
+% o Space it takes
+% o Things it affects : none
+% o Bitcode files
+
+\section{Incremental Compilation}
+
+Wybe, as a programming language, wants to be useful for large scale
+projects. Thus, it wants its compilation process to be as effecient as
+possible. In larger projects, a large number of modules are involved in a
+single build. Doing incremental builds would involve smaller changes being
+added for every fresh build. Having all the modules compile again is a waste of
+time. 
+
+Wybemk is incremental at a lot of levels. The goal is to identify key stages of
+a compilation process which can act as save and restore points. The saving is
+done in object files (or bitcode files) as shown above. The decision to restore
+has to be a careful one, as a false positive would result in a completely wrong
+build. There should be no margin for these kinds of errors to exist if this
+compiler is to be used in production builds. There is also a requirement of
+incrementality without losing the benefits of LPVM optimisations. With these
+constraints, Wybemk has two incremental and work saving approaches: Module
+level reloading, and storing hashes of key compilation stages. 
 
 
-\section{Loading Inlienable LPVM}
+\subsection{Module level reloading}
 
-Talk about object file file structures?
+Wybemk compiler behaves like GNU Make but it does not depend on Makefiles. It
+infers the module dependancy graph and builds everything accordingly. It should
+also link in standard libraries and external foreign libraries wherever
+needed. Inferring the dependancy graph is done through parsing the top level
+\textit{use module} statements. During compilation LPVM representation of each
+module in the graph is built. For modules who have a newer object file, this
+representation will be stored in a serialised form and has to be
+\textit{reloaded} into the pipeline. This keeps the optimisations going and
+allows other modules to inline functions or procedures from that module.
+
+For example the \textit{int} module in the Wybe standard library module
+(Figure~\ref{fig:wybe_int}) mostly has one line procedures and functions
+(simple arithmetic operators pointing to LLVM instructions). That is, their
+body is a single procedure call. Instances of calls to \textit{proc +} can be
+replaced with the body proc call instead. And this is what actually happens
+when the standard library object file is \textit{loaded} by the Wybemk
+compiler. Inlining at LPVM level provides these small but essential benefits.
+
+
+\subsection{Incrementality through Hashes}
+
+
+
 
