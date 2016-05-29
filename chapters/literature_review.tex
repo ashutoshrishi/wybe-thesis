@@ -1,3 +1,209 @@
 \chapter{Literature Review}
 
+% describe the outline of the chapter and the papers discussed
+
+The logic program based intermediate representation presented in
+\cite{lpvm2015} is the IR used in the Wybe compiler. It is an integral stage of
+the compilation pipeline and its features and benefits affect a lot of
+decisions made in the construction of this compiler. The Wybe compiler doubles
+as a showcase for a working implementation of the proposed logic IR. A
+discussion of this paper is presented in section~\ref{sec:horn_clauses}.
+
+Our goal is to build an incremental compiler which exploits the structure of
+the LPVM IR. Examining the approaches taken by other systems for building
+incremental compilers and understanding their obstacles is important so that we
+can build our system smoothly. An incremental compiler for C++ given in
+\cite{cpp_compiler} presents a working system to compile at the function (or
+object) level instead of the file (or module) level. Their approach is
+discussed in section~\ref{sec:cpp_compiler}.
+
+% paper on make and paper no 44
+% LLVM papers
+
+\section{Horn Clauses as an Intermediate Representation \citep{lpvm2015}}
+\label{sec:horn_clauses}
+
+
+The paper describes a new form of IR using a logic programming structure, now
+called LPVM in the Wybe compiler. Since this thesis extends the LPVM
+implementation by providing code generation for it and harnessing its features
+in building incremental features in the compiler, it's important to understand
+the reasoning behind the structure of LPVM and its benefits over its
+counterparts. LPVM can be compared with the commonly used IR forms like the
+Three Address Code and its Static Single Assignment (SSA) extension
+\citep{alpernSSA}. The paper presents sound discussions of the drawbacks of
+these forms and the other solutions used to solve these drawbacks. The other
+solutions listed extend the SSA form to address its limitations, whereas LPVM
+does not need to make an attempt at doing so. It instead presents a completely
+different structure that is free from these drawbacks from the get-go. This
+structure uses \textit{Horn Clauses} from logic programming imposing certain limitations
+on that form.
+
+The Three Address Code (TAC) IR and its refinement, the Static Single
+Assignment (SSA) form, are popular IRs used in compiler constructions. They are
+simple enough to be universal and can accommodate different source language
+semantics due to their fairly open structure. They can be constructed
+efficiently \citep{cytronSSA} and allow numerous useful optimisation
+techniques. A SSA based IR will generally be laid out as basic blocks and
+branching instructions connecting them, like a graph. The SSA refinement
+requires all variable names to be unique in a block. This makes it easier to
+track variable lifelines. But this also requires a virtual function called
+\phif to choose between the versions of the same variable coming in from two
+alternate predecessor blocks since each of those blocks will have its own name
+for that variable. Thus, there will be a \phif for every variable whose value
+can arrive from alternative predecessor paths into the current block. This
+function is \textit{fake} and will not have code generated for it. Instead it's
+evaluation is solely for program analysis and requires backtracking into
+analyses of the predecessor blocks to determine the actual path taken by the
+control and determine the resulting abstract value. Even though the SSA form is
+visually simple, it's construction may not be so. The limitations of this form
+is part of the motivation for presenting LPVM.
+
+A \phif does not provide information on the control flow path. Computation of
+the path taken will have to done backwards, by looking into the predecessor
+blocks. Another extension presented in \cite{gsa}, called the Gated Single-Assignment
+(GSA) form, augments the existing \phif function to capture the block
+entering condition. This makes path determination easier, but at the cost of
+adding more complication to the SSA form. The LPVM form on the other hand has a
+more explicit information flow in its basic structure.
+
+SSA is useful for local block analyses. But the branching of blocks and the
+joining of incoming variables with \phifs are biased to forward analysis. In
+backward analysis it's not trivial to know of the alternate blocks holding
+alternate versions of the variables in the current block. This bias is avoided
+with another extension called the Static Single Information (SSI). This form
+includes another virtual function ($\sigma$) to the end of the blocks which
+branch into alternate blocks which describes the destinations of each alternate
+variable. LPVM provides this information easily as part of its basic structure.
+
+The unique assignment restriction results in alternate versions of the same
+variable in diverging blocks. Which in turn requires extra work for converging
+back into one variable. Another functional programming form of SSA
+\citep{appelfp} is discussed which avoids duplicate versions of a variable by
+replacing branching with function calls and \phifs with parameter
+passing. Every alternate block will replace its jump to the converging
+destination with a function call. Even though this is a declarative form just
+like LPVM, it still makes information flow explicit only in the forward
+direction by specifying only the in flowing parameters. LPVM instead provides
+the input and output parameters for a block.
+
+So far every drawback of SSA has been addressed can be solved by creating an
+extension to the SSA structure. While these are perfectly feasible, they are
+additional complexities. In the case of LPVM these problems are solved at the
+basic structural level, without any special functions.
+
+The LPVM IR is a restricted form of a logical language. It does not feature
+non-determinism seen commonly in a LP. Therefore all input parameters have to
+be bound to a value before calling that procedure. It also requires fixing the
+mode of a parameter. In LP, a procedure can have a parameter which can behave
+as an input or an output. LPVM requires this behaviour to the explicit and
+fixed for every parameter. These restrictions makes LPVM surprisingly easy to
+read and reason with.
+
+
+At the top level LPVM form there are only predicates (or procedures). In the
+form presented in the paper a procedure consists multiple \textit{Horn
+  Clauses}. The \textit{Head} of a \textit{Clause} describes its parameters and
+predicate name. These parameters can be in-flowing or out-flowing. In the
+abstract model the output parameters are separated from the input parameters
+with a semi-colon. If we look at a \textit{Clause} body as a block in SSA,
+then unlike SSA we have explicit information on all the variables entering and
+exiting the block without any extra virtual functions.
+
+For a predicate or procedure call in LPVM, only one of its \textit{clauses} will be
+executed. This is due to LPVMs' enforcement of determinism. That clause can be
+seen as the entire procedure itself with the \textit{Head} as the procedure
+prototype. The parameters to a clause also needs its modes to be explicitly
+defined: either as an input or an output. There may be two alternative
+\textit{Clauses} of the same name having switched up modes for the same
+parameters. Since determinism will select only one of them as the procedure,
+single modedness is preserved. The goals in the \textit{Clause} body can be a
+guard goals (conditionals) or be simple goals. Guard goals should create a fork
+in the control flow through the body. But in LPVM this is mitigated by creating
+another \textit{Clause} which has the same sequence of goals up to this guard,
+but thereafter follows the complimentary evaluation. Hence, the control flow is
+explicit unlike SSA. The actual implementation, discussed in a later chapter,
+is a little different in its data structure for branching. But the behaviour is
+preserved. 
+
+
+\begin{figure}
+  \begin{minipage}{.5\textwidth}
+  \end{minipage}
+  \begin{minipage}{.5\textwidth}
+    \begin{align*}
+      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b != 0 \\
+                    &\wedge mod(a,b,?b') \\
+                    &\wedge gcd(b,b',?ret) \\
+      \\
+      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b == 0 \\
+      &\wedge ret=a \\
+    \end{align*}
+  \end{minipage}
+  \caption{Comparison of SSA and LPVM for the gcd function.}
+  \label{fig:gcd_ssa_lpvm}
+\end{figure}
+
+
+
+In comparison with SSA, the basic blocks are replaced with \textit{clauses}.
+The branching and jumps is replaced with procedure calls. Each procedure
+provides the names of the variables moving in and moving out of it, favouring
+both directions of analysis. Loops are replaced with recursive procedure
+calls. We know which variables the body of the procedure (or its
+\textit{Clause}) will be building up for outputs just by looking at the
+procedure signature. There is no need for return instructions or \phifs. This
+also makes purity reasoning explicit. Everything that a LPVM procedure affects
+(in terms of \textit{registers} or other \textit{resources}) have to be
+declared in the signature or \textit{Head}. The Figure~\ref{fig:gcd_ssa_lpvm}
+demonstrates these differences of semantic structure between the SSA and LPVM
+for a simple \textit{gcd} function.
+
+% one last concluding paragraph
+
+
+\section{Achieving Incremental Compilation through\\ Fine-grained Builds
+  \citep{cpp_compiler}}
+\label{sec:cpp_compiler}
+
+The system given by \cite{cpp_compiler} is a incremental integrated program
+development system for C++ called \textit{Barbados}. It contains a build system
+with a granularity of functions and procedures instead of the usual file level
+granularity. This is quite similar to the build system we want for Wybe. The
+requirements for building such a system, as listed in the paper, involve
+automatic dependency inference, transparent compilation, and ensuring no old
+code is executed. These are also the requirements we want the Wybe compiler to
+follow. The actual implementation of the system is quite different from what we
+want in our compiler though. While Barbados focuses on building an interactive
+system which lazily compiles code given to it, while deciding whether to do a
+re-compilation, Wybe wants the incremental features to kick in during
+compilation of a full source code module. The compilation is also done from the
+source code to object code in Barbados, whereas for the Wybe compiler, the
+tracked compilation will be considering the LPVM structure in the middle too.
+
+The code structures that Barbados considers at the lowest granular level of
+compilation are chosen in a way that dependencies between them can be generated
+automatically. The first step highlighted by the paper is the tracking of these
+dependencies. There is also an emphasis on having a separation of interface and
+body for all of the basic entities of compilation. If an interface is able to
+completely reflect a need for compilation in the body then the body is only
+re-compiled on an interface change. The use of time stamps along with the
+dependency tracking can ensure that the correct versions of compiled code can
+be used. These constraints are sound and tested, and as such are ensured in the
+Wybe compiler.
+
+Barbados tackles the dependency tracking problem by maintaining a tree like
+structure to show dependencies. The entities can be involved in a transitive
+closure of dependencies. For every compilation the root of the tree is
+targeted. The system then moves through the tree until it reaches a leaf and
+then works it way back from there. This way it can ensure that is it dealing
+with dependencies in the correct order. There are a couple of problems that can
+arise with this structure such as circular dependencies and the volatility of
+dependencies during tree traversal. These problems are solved by multiple
+traversals of the tree. The paper finds that the time spent in multiple
+traversals is negligible when compared to compilation times, providing support
+for this approach. The heuristic for change in an entity is a time stamp. While
+these are effective for propagating change, it may be missing cases when the
+same entity is saved over the old one. The time stamp changes but structurally
+nothing has changed.
 

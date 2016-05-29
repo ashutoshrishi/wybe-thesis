@@ -1,169 +1,124 @@
-\chapter{LPVM}
+\chapter{Implementation of LPVM}
 
-\section{Horn Clauses as an Intermediate Representation}
+The actual implementation of the LPVM structure differs a bit from the abstract
+structure proposed in \cite{lpvm2015}. For a guard goal, the abstract
+representation results in having two clauses with the same initial sequence of
+goals up until complimentary guard goals. In the implementation however, to
+avoid duplication, there is only one clause generated. The basic clause body is
+a sequence of goals barring a guard goal. At the guard goal a fork is created
+which contains the fork condition, and a list of basic subsequent clause
+bodies, each for an outcome of the condition. A binary condition will have two
+basic bodies in the fork list. This is similar to basic block branching in SSA,
+however the diverging branches don't need to converge in a body and hence there
+will be no need for \textit{phi} like functions.
 
-\cite{lpvm2015}
-
-The paper describes a new form of IR using a logical programming structure, now
-called LPVM. The wybe compiler presents an implementation of this clausal form
-and as such LPVM is a core part of its pipeline. This thesis provides the final
-code generation stage for LPVM and wybe.
-
-LPVM is an attempt to make program analysis and transformation easier. It's an
-alternative to the common imperative IR forms while maintaining a similar set
-of program analysis methods. The paper compares LPVM against the other current
-options for an IR, like the three address code and SSA, discussing the
-drawbacks of these common IRs. The focus is on solving these drawbacks at a
-more fundamental level rather than relying on further transformations. The
-motivation outlined in the paper is having a simple limited structure in
-analysis, while drawing in existing logical programming reasoning. The limited
-set of primitives, additionally enables the wybe compiler to be more efficient
-by embedding a LPVM transformation in the object file. This would have been
-inefficient with a more complex structure.
-
-The Three Address Code (TAC) IR and its refinement, the Static Single
-Assignment (SSA) form, are popular IRs used in compiler constructions. They are
-simple enough to be universal and are quite extensible to accommodate different
-source language semantics due to their little restrictions. A SSA based IR will
-generally be laid out as basic blocks and branching instructions connecting
-them, like a graph. The SSA refinement requires all variable names to be unique
-in a block. This makes it easier to track variable lifelines. But
-this also requires a virtual function called phi to choose the value of the
-same variable coming in from two different blocks. The paper points out that
-this is inadequate for determining the control flow path. While the phi
-function can tell us which blocks are providing the values for the same
-variable during analysis, it won't tell us the condition that was evaluated for
-that decision. This can be done by looking into all the predecessor blocks that
-provided the value. Another solution to this, as pointed out by the paper, is
-using the Gated Single-Assignment (GSA) form which augments the existing phi
-function to capture the block entering condition.
-
-Another drawback described is the SSA form being biased to forward
-analysis. The phi function at the top of a block is helpful for analysing that
-block locally. A predecessor block (to the block with phi) just knows about its
-branching destination, and not about the phi function choosing between its
-variables and other blocks. A transformation to the standard SSA form, called
-the Static Single Information (SSI), provides a solution to this problem by
-adding another virtual function to the end of the blocks which describes the
-variables that will be compare with other blocks in the subsequent block.
-
-So far every drawback of SSA has been addressed can be solved by creating an
-extension to the SSA structure. While these are perfectly feasible, they are
-additional complexities. In the case of LPVM these problems are solved at the
-basic structural level, without any special functions. During analysis, the
-special functions of SSA have to be resolved with extra work. An analysis of a
-block containing phi node involves revisiting the analysis work done for the
-predecessor blocks. This is a result of SSA's naming rules. Even
-though SSA enforces unique names for every declaration, alternate blocks can
-still have the same variable names. A more functional translation of SSA
-avoids this, but still exhibits the forward bias problem.
-
-% Don't just summarise the drawbacks, don't need to, just say its there and
-% discussed, LPVM does better at a structural level. And its important to
-% understand these common drawbacks since SSA is pop-u-lar.
-
-% Explanation of the LP form
-The LPVM IR is a restricted form of a logical language. It does not feature
-non-determinism seen commonly in a LP. Therefore all input parameters have to
-be bound to a value before calling that procedure. It also requires fixing the
-mode of a parameter. In LP, a procedure can have a parameter which can behave
-as an input or an output. LPVM requires this behaviour to the explicit and
-fixed for every parameter for easier reasoning. These restrictions makes LPVM
-surprisingly easy to read.
-
-% Present a simple explanation of horn clauses
-At the top level LPVM form there are only procedures. In the form presented in
-the paper a procedure consists multiple \textit{Horn Clauses}. A horn clause
-with its \textit{Head} describing its parameters and procedure name, and the
-sequence of goals as the body can be seen as a procedure itself. Since LPVM
-wants to be deterministic, only one of the clauses with the same name evaluated
-for given inputs. That clause can be seen as the entire procedure itself with
-the \textit{Head} as the procedure signature, without bothering about the usual
-backtracking in LP. The parameters to a clause also needs its modes to be
-explicitly defined: either as an input or an output. There may be two
-alternative \textit{Clauses} of the same name having switched up modes for the
-same parameters. Since determinism will select only one of them as the
-procedure, single modedness is preserved.
-
-The \textit{Goals} are simple body statements. Logical statements in SSA result
-in block cause branching. These statements are represented as guard goals in
-LPVM. When a guard goal is encountered, a new clause will be created with the
-same goal sequence until that guard, but will follow the complimentary
-evaluation of the guard after that. In the implementation however, the
-procedure body or the clause body or the sequence of goals are put in a tree
-data structure. Instead of having somewhat duplicated sequence of goals in
-creating an alternate clause, the guard goals instead create branching child
-nodes, each with further sequence of goals. This is similar to the layout of
-basic blocks within a function in SSA, which makes it easier to translate the
-LPVM to any SSA based IR later for code generation. 
-
-At the end of conversion to LPVM, the IR form only contains procedures with
-multiple clauses. Alternate branches of conditionals are incorporated in their
-own clauses, chosen by the evaluation of a guard statement. Unconditional jumps
-are procedural calls and loops are flattened to recursive procedure
-calls. Every procedure will also define all its input and output parameters
-explicitly in its signature. Since output variables are specified here, there
-is no need of a return instruction. The only variables that would exist in the
-clause bodies are now the specified input and output variables, and temporaries
-between them. This declarative paradigm greatly simplifies a lot of
-analyses. This also helps determine the purity of a procedure. 
-
-
-\section{Current Implementation of LPVM}
+In a way LPVM procedures or predicates are polymorphic since a call to them
+will execute any one of the clauses under them. There can be a \textit{Clause}
+for different modes of the procedure parameters. For example, the procedure
+\( - \) can have clauses \( -(a, b, ?c) \) and \( -(a, ?b, c) \), marking
+different operand positions as outputs. Even though each of the clause
+functions in a single mode, a procedure can be made to exhibit multiple modes
+of a logic programming language. This construct is very similar to the
+polymorphism Wybe has to offer, and is such this construct directly enables it
+it. 
 
 
 \begin{figure}
-\centering
-\begin{tabular}{l@{\hskip 1in} l}
-  \( x0 = x1 + x3 \)              & \( wybe.int.+(x1, x3, ?x0) \) \\
-  \( if\ (x0 > 0)\ left\ right \) & \( wybe.int.>(x0,\ 0,\ ?tmp1) \) \\
-                                  & \( case\ tmp1\ of \) \\
-                                  & \( 0:\ left.. \) \\
-                                  & \( 1:\ right.. \) \\
-                                
+  \centering
+  \begin{tabular}{l@{\hskip 1in} l}
+    \( x0 = x1 + x3 \)              & \( wybe.int.+(x1, x3, ?x0) \) \\
+    \( if\ (x0 > 0)\ left\ right \) & \( wybe.int.>(x0,\ 0,\ ?tmp1) \) \\
+                                    & \( case\ tmp1\ of \) \\
+                                    & \( 0:\ left.. \) \\
+                                    & \( 1:\ right.. \) \\
+    
 
-\end{tabular}
-\\
-\caption{SSA statement and their equivalent LPVM goals}
+  \end{tabular}
+  \\
+  \caption{SSA statement and their equivalent LPVM goals}
 \end{figure}
 
 \begin{figure}
-\centering
-\begin{tabular}{r c l}
-\( Proc \)   & \( \rightarrow \) & \( Clause* \) \\
-\( Clause \) & \( \rightarrow \) & \( Proto\ Body \) \\
-\( Proto \)  & \( \rightarrow \) & \( Name\ Param* \) \\
-\( Param \)  & \( \rightarrow \) & \( Name\ Type\ Flow \) \\
-\( Body \)   & \( \rightarrow \) & \( Prim*\ Fork \) \\
-\( Prim \)   & \( \rightarrow \) & \( PrimCall\ |\ PrimForeign \) \\
-\( Fork \)   & \( \rightarrow \) & \( Var\ Body* \) \\
-\end{tabular}
-\caption{LPVM Implementation Data Type}
-\label{fig:lpvm_data_type}
+  \centering
+  \begin{tabular}{r c l}
+    \( Proc \)   & \( \rightarrow \) & \( Clause* \) \\
+    \( Clause \) & \( \rightarrow \) & \( Proto\ Body \) \\
+    \( Proto \)  & \( \rightarrow \) & \( Name\ Param* \) \\
+    \( Param \)  & \( \rightarrow \) & \( Name\ Type\ Flow \) \\
+    \( Body \)   & \( \rightarrow \) & \( Prim*\ Fork \) \\
+    \( Prim \)   & \( \rightarrow \) & \( PrimCall\ |\ PrimForeign \) \\
+    \( Fork \)   & \( \rightarrow \) & \( Var\ Body* \) \\
+                 & \( \rvert \)      & \( NoFork \) \\
+  \end{tabular}
+  \caption{LPVM Implementation Data Type}
+  \label{fig:lpvm_data_type}
 \end{figure}
+
+
+\noindent\begin{figure}
+  \vskip 1em
+  \noindent\begin{minipage}{.4\textwidth}
+    \begin{Verbatim}[frame=single,framesep=2mm,commandchars=\\\{\}]
+\textbf{do} a
+   \textbf{if} b: Break
+   \textbf{else}: c
+\textbf{end}
+d
+    \end{Verbatim}
+  \end{minipage}
+  \noindent\begin{minipage}{.5\textwidth}
+    \begin{tabular}{r c l}
+     $ \mathbf{proc}\ next1\ $ & $ \rightarrow $ & $ a\ gen1\ \mathbf{end} $\\
+     $ \mathbf{proc}\ gen1\  $ & $ \rightarrow $ & $ \mathbf{guard}\ b\ 1:
+                                                   break1\ \mathbf{end} $ \\
+                               & $ \rvert $      & $ \mathbf{guard}\ b\ 0:
+                                                   gen2\ \mathbf{end} $ \\
+     $ \mathbf{proc}\ gen2\ $  & $ \rightarrow $ & $ c\ next1\ \mathbf{end} $ \\
+     $ \mathbf{proc}\ break1\ $ & $\rightarrow$ & $ d\ \mathbf{end} $ \\
+    \end{tabular}
+  \end{minipage}
+  \caption{LPVM Procedures generated for an Imperative Loop}
+  \label{fig:loop_lpvm}
+\end{figure}
+
 
 The Figure~\ref{fig:lpvm_data_type} shows the algebraic data type used to hold
-the LPVM IR. This representation has wybe sensitive information like wybe types
-and module definitions stripped away for easier discussion. The actual
-implementation will be looked at again in a latter chapter.
+the LPVM IR. This representation has Wybe sensitive information like Wybe types
+and module fields stripped away for easier discussion. In the implemented data
+type, the term \textit{Goal} is replaced with \textit{Prim}, for
+primitive. These primitive statements are meant to reflect source and target
+code semantics. They are just procedure calls and the only semantic information
+they contain are the procedure name and the signature. These can be used to
+refer to source language procedures or machine code (or LLVM) instructions just
+as easily. Local calls look like: \textit{factorial(tmp\$10: int, ?tmp\$3:
+  int)}, and foreign calls look like: \textit{foreign llvm mul(tmp\$2: int, 9:
+  int, ?tmp\$3: int)}. The compiler will decide what code to generate for a
+given \textit{Prim}.
+
+Conditional statements or goals partition a clause body as discussed above. But
+a loop conditional can't just do that as it would require a a jump back into a
+previous body. LPVM does not have these, and in fact these are part of the SSA
+drawbacks it wants to avoid. Loops are un-branched by generating new procedures
+which are involved in recursive calls. The calls are tail calls and hence the
+code generation will have to ensure tail call optimisation is
+enabled. A procedure will be generated for the loop body primitives which ends
+up calling itself recursively, and another generated procedure will contain the
+body which comes after the loop. The clause body that the loop was a statement
+in originally will end with a call to the former. There would also be a
+breaking conditional call to the latter.
+
+If we consider \textit{a}, \textit{b}, \textit{c}, \textit{d} as a
+representation for one or more body statements or primitives, a looping
+construct looks like \( \mathbf{do}\ a\ b\ \mathbf{end}\ c\ d\). The two
+generated procedures for it will can be
+\( \mathbf{next1:}\ a\ b\ next1\ \mathbf{end} \) and
+\( \mathbf{break1:}\ c\ d\ \mathbf{end} \). A more compound example with
+conditional breaking is shown in Figure~\ref{fig:loop_lpvm}. The guard goal(s)
+\textit{b} decides whether to exit the loop or not, and \textit{c} represents
+the remaining body of the loop after the condition. The conditional inside the
+loop split the generated procedure \textit{next1} into \textit{gen1} and
+\textit{gen2}. As shown above, in the implementation the two clauses of
+\textit{gen2} will be present in a \textit{Fork} based on the value of \textit{b}.
 
 
-In the LPVM implementation used by the Wybe compiler every goal is a primitive
-procedure call. At the most basic level these are similar to primitive machine
-instructions. This again simplifies code generation. As mentioned above,
-instead of having duplication of clause bodies the guard goals currently result
-in a fork of bodies. Generation of two complementary clauses similar to the
-LPVM specifications in the paper is trivial from this tree structure.
 
-
-All loops and conditionals are un-branched by generating new procedures which
-are involved in recursion. The calls are tail calls and hence the code
-generation will have to ensure tail call optimisation is enabled. Simple
-conditionals like if conditions, just generate a fork in the body. The
-alternate destinations, say \textit{Body A} and \textit{Body B}, are stored in a
-list in the \textit{Fork}. Since the \textit{Fork} is at the end of a clause
-\textit{Body}, the remaining body (after the If statement) is placed in a new
-generated procedure. This generated procedure is called at the end of
-\textit{Body A} and \textit{Body B}.
-
-% Explain Loops 

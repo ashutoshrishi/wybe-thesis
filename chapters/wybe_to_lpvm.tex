@@ -1,0 +1,116 @@
+\chapter{Transforming Wybe to LPVM}
+
+\begin{figure}
+  \centering
+  \begin{tabular}{r c l}
+
+    \( func\ factorial(n:int):int \) & \(\rightarrow \) & 
+                                                          \( proc\ factorial(n:wybe.int, ?\verb+$+:wybe.int) \) \\
+    \( ?c = bar(a, b) \) & \(\rightarrow\) & \( bar(a, b, ?c) \) \\
+    \( ?y = f(g(x)) \) & \(\rightarrow\) & \( g(x, ?temp)\ f(temp, ?y) \) \\
+
+
+  \end{tabular}
+  \\
+  \caption{Normalisation of Wybe functions to Procedures.}
+  \label{fig:wybe_convert_to_proc}
+\end{figure}
+
+
+
+\begin{figure}
+  \centering
+  \begin{tabular}{r c l}
+    \( ProcDef \)     & \( \rightarrow \) & \( ProcImpln* \)   \\
+    \( ProcImpln \)   & \( \rightarrow \) & \( ProcDefSrc \)   \\
+                      & \( \rvert \)        & \( ProcDefPrim \)  \\
+    \( ProcDefSrc \)  & \( \rightarrow \) & \( Stmt* \)        \\
+    \( ProcDefPrim \) & \( \rightarrow \) & \( Proto\ Body \)  \\
+  \end{tabular}
+  \caption{The Procedure Implementation Algebraic Data Type}
+  \label{fig:proc_impln}
+\end{figure}
+
+
+
+The Wybe syntax tree is slowly transformed to the LPVM IR structure. In this
+process it undergoes \textit{flattening}, \textit{type checking},
+\textit{un-branching}, and a final clause generation pass to obtain a structure
+similar to Figure~\ref{fig:lpvm_data_type}. The type which stores the
+implementation of a Wybe procedure, in source and LPVM form, is shown in
+Figure~\ref{fig:proc_impln}. A procedure definition \textit{ProcDef} will also
+contain other information about the callers, visible types, and more. A
+procedure can have multiple implementation, each implementation corresponding
+to a different \textit{Clause} of the procedure. Initially a \textit{ProcImpln}
+will be composed from the constructor \textit{ProcDefSrc}, indicating source
+language form. On transformation to LPVM, the same type will have the
+constructor \textit{ProcDefPrim}. The \textit{Proto} and \textit{Body} are
+similar to the constructors in Figure~\ref{fig:lpvm_data_type}.
+
+The compiler implementation keeps the pipeline modular. While the module
+implementations are stored in a \textit{List} data structure, it is possible to
+generate a module dependency graph given a module. The implementation for any
+given module name can by pulled from or place in the module list store. The
+alternative approach of always maintaining a dependency \textit{Map} would have
+made jumping into and out of module implementations more costly since these
+operations are done multiple times during a pass. This also makes loading and
+removing module implementations in the pipeline very easy, assisting the
+incremental features later.
+
+\subsection{Flattening Pass}
+
+During compilation everything is converted to a procedure quite early
+in the pipeline. The functions and expressions are normalised to look like a
+procedure definition along with the flattening step by the compiler. The output
+of the function is simply added as a out flowing parameter in its procedure
+form. Expressions are dealt with in a similar way.  Some common conversions are
+shown in Figure~\ref{fig:wybe_convert_to_proc}.
+
+Since LPVM primitives are in the form of procedure calls, all normalised Wybe
+statements are gradually reduced to procedure calls too. These primitive
+procedure calls can be calls to other procedures in the module or imported
+modules (fully qualified procedure names), or be foreign calls. Foreign calls
+reference procedures or instructions which have to be addressed later by
+linking in some library which provides it. For example, the wybe standard
+library defines \textit{println} whose body statements are foreign calls to C's
+\textit{printf}. A shared C library will be linked with the standard library to
+resolve these calls to access system IO later. To Wybe and LPVM the only
+difference between a local and a foreign procedure call is that the local calls
+can be in-lined since their definitions will have a LPVM form in another wybe
+module. Otherwise it is just another \textit{Prim} (primitive) in a LPVM clause
+body.
+
+\subsection{Type Checking Pass}
+
+Wybe is statically typed, so having a type checking pass is essential. Every
+variable name in the AST will be annotated with an inferred type. This pass
+connects type names to the modules that provide the definition for that
+type. This is required as even standard types like \textit{int} can be provided
+by a non standard library just as easily. Polymorphic calls are resolved to the
+actual definitions here.
+
+Type definitions include functions and procedures which work with the defined
+type. For example, the equality function \textit{'='}, can be defined in a type
+module for \textit{int} and the type module for \textit{string}. The type
+checker will choose one depending on the context. A statement comparing two
+\textit{int} (inferred) variables the call \textit{proc call =(a, b, ?c)}, will
+be converted to \textit{proc call wybe.int.=(a:wybe.int, b:wybe.int,
+  ?c:wybe.int)}. By the end of a successful type checking, every flattened
+procedure call and variable types names will have an annotation of the fully
+qualified module that defines it.
+
+
+\subsection{Un-branching Pass}
+
+The un-branching pass is where all conditional branches and loops are replaced
+with procedure calls and recursion respectively. This is the structure defined
+by LPVM. At this stage, a flattened Wybe procedure may create one or more
+generated procedures to act as branching blocks, as described in the chapter on
+LPVM.
+
+
+
+% talk about inlining 
+
+
+

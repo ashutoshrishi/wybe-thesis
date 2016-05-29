@@ -1,87 +1,173 @@
-\message{ !name(wybe.tex)}
-\message{ !name(wybe.tex) !offset(-2) }
-\chapter{Wybe programming Language}
+\message{ !name(lpvm.tex)}
+\message{ !name(lpvm.tex) !offset(-2) }
+\chapter{LPVM}
+
+\section{Horn Clauses as an Intermediate Representation}
+
+\cite{lpvm2015}
+
+The paper describes a new form of IR using a logical programming structure, now
+called LPVM. The wybe compiler presents an implementation of this clausal form
+and as such LPVM is a core part of its pipeline. This thesis provides the final
+code generation stage for LPVM and wybe.
+
+LPVM is an attempt to make program analysis and transformation easier. It's an
+alternative to the common imperative IR forms while maintaining a similar set
+of program analysis methods. The paper compares LPVM against the other current
+options for an IR, like the three address code and SSA, discussing the
+drawbacks of these common IRs. The focus is on solving these drawbacks at a
+more fundamental level rather than relying on further transformations. The
+motivation outlined in the paper is having a simple limited structure in
+analysis, while drawing in existing logical programming reasoning. The limited
+set of primitives, additionally enables the wybe compiler to be more efficient
+by embedding a LPVM transformation in the object file. This would have been
+inefficient with a more complex structure.
+
+The Three Address Code (TAC) IR and its refinement, the Static Single
+Assignment (SSA) form, are popular IRs used in compiler constructions. They are
+simple enough to be universal and are quite extensible to accommodate different
+source language semantics due to their little restrictions. A SSA based IR will
+generally be laid out as basic blocks and branching instructions connecting
+them, like a graph. The SSA refinement requires all variable names to be unique
+in a block. This makes it easier to track variable lifelines. But
+this also requires a virtual function called phi to choose the value of the
+same variable coming in from two different blocks. The paper points out that
+this is inadequate for determining the control flow path. While the phi
+function can tell us which blocks are providing the values for the same
+variable during analysis, it won't tell us the condition that was evaluated for
+that decision. This can be done by looking into all the predecessor blocks that
+provided the value. Another solution to this, as pointed out by the paper, is
+using the Gated Single-Assignment (GSA) form which augments the existing phi
+function to capture the block entering condition.
+
+Another drawback described is the SSA form being biased to forward
+analysis. The phi function at the top of a block is helpful for analysing that
+block locally. A predecessor block (to the block with phi) just knows about its
+branching destination, and not about the phi function choosing between its
+variables and other blocks. A transformation to the standard SSA form, called
+the Static Single Information (SSI), provides a solution to this problem by
+adding another virtual function to the end of the blocks which describes the
+variables that will be compare with other blocks in the subsequent block.
+
+So far every drawback of SSA has been addressed can be solved by creating an
+extension to the SSA structure. While these are perfectly feasible, they are
+additional complexities. In the case of LPVM these problems are solved at the
+basic structural level, without any special functions. During analysis, the
+special functions of SSA have to be resolved with extra work. An analysis of a
+block containing phi node involves revisiting the analysis work done for the
+predecessor blocks. This is a result of SSA's naming rules. Even
+though SSA enforces unique names for every declaration, alternate blocks can
+still have the same variable names. A more functional translation of SSA
+avoids this, but still exhibits the forward bias problem.
+
+% Don't just summarise the drawbacks, don't need to, just say its there and
+% discussed, LPVM does better at a structural level. And its important to
+% understand these common drawbacks since SSA is pop-u-lar.
+
+% Explanation of the LP form
+The LPVM IR is a restricted form of a logical language. It does not feature
+non-determinism seen commonly in a LP. Therefore all input parameters have to
+be bound to a value before calling that procedure. It also requires fixing the
+mode of a parameter. In LP, a procedure can have a parameter which can behave
+as an input or an output. LPVM requires this behaviour to the explicit and
+fixed for every parameter for easier reasoning. These restrictions makes LPVM
+surprisingly easy to read.
+
+% Present a simple explanation of horn clauses
+At the top level LPVM form there are only procedures. In the form presented in
+the paper a procedure consists multiple \textit{Horn Clauses}. A horn clause
+with its \textit{Head} describing its parameters and procedure name, and the
+sequence of goals as the body can be seen as a procedure itself. Since LPVM
+wants to be deterministic, only one of the clauses with the same name evaluated
+for given inputs. That clause can be seen as the entire procedure itself with
+the \textit{Head} as the procedure signature, without bothering about the usual
+backtracking in LP. The parameters to a clause also needs its modes to be
+explicitly defined: either as an input or an output. There may be two
+alternative \textit{Clauses} of the same name having switched up modes for the
+same parameters. Since determinism will select only one of them as the
+procedure, single modedness is preserved.
+
+The \textit{Goals} are simple body statements. Logical statements in SSA result
+in block cause branching. These statements are represented as guard goals in
+LPVM. When a guard goal is encountered, a new clause will be created with the
+same goal sequence until that guard, but will follow the complimentary
+evaluation of the guard after that. In the implementation however, the
+procedure body or the clause body or the sequence of goals are put in a tree
+data structure. Instead of having somewhat duplicated sequence of goals in
+creating an alternate clause, the guard goals instead create branching child
+nodes, each with further sequence of goals. This is similar to the layout of
+basic blocks within a function in SSA, which makes it easier to translate the
+LPVM to any SSA based IR later for code generation. 
+
+At the end of conversion to LPVM, the IR form only contains procedures with
+multiple clauses. Alternate branches of conditionals are incorporated in their
+own clauses, chosen by the evaluation of a guard statement. Unconditional jumps
+are procedural calls and loops are flattened to recursive procedure
+calls. Every procedure will also define all its input and output parameters
+explicitly in its signature. Since output variables are specified here, there
+is no need of a return instruction. The only variables that would exist in the
+clause bodies are now the specified input and output variables, and temporaries
+between them. This declarative paradigm greatly simplifies a lot of
+analyses. This also helps determine the purity of a procedure. 
+
+
+\section{Current Implementation of LPVM}
 
 
 \begin{figure}
 \centering
-\begin{tabular}{r c l}
-
-\( func\ factorial(n:int):int \) & \(\rightarrow \) & 
-\( proc\ factorial(n:wybe.int, ?\verb+$+:wybe.int) \) \\
-\( ?c = bar(a, b) \) & \(\rightarrow\) & \( bar(a, b, ?c) \) \\
-\( ?y = f(g(x)) \) & \(\rightarrow\) & \( g(x, ?temp)\ f(temp, ?y) \) \\
-
+\begin{tabular}{l@{\hskip 1in} l}
+  \( x0 = x1 + x3 \)              & \( wybe.int.+(x1, x3, ?x0) \) \\
+  \( if\ (x0 > 0)\ left\ right \) & \( wybe.int.>(x0,\ 0,\ ?tmp1) \) \\
+                                  & \( case\ tmp1\ of \) \\
+                                  & \( 0:\ left.. \) \\
+                                  & \( 1:\ right.. \) \\
+                                
 
 \end{tabular}
 \\
-\caption{Normalisation of Wybe functions to Procedures.}
-\label{fig:wybe_convert_to_proc}
+\caption{SSA statement and their equivalent LPVM goals}
 \end{figure}
 
+\begin{figure}
+\centering
+\begin{tabular}{r c l}
+\( Proc \)   & \( \rightarrow \) & \( Clause* \) \\
+\( Clause \) & \( \rightarrow \) & \( Proto\ Body \) \\
+\( Proto \)  & \( \rightarrow \) & \( Name\ Param* \) \\
+\( Param \)  & \( \rightarrow \) & \( Name\ Type\ Flow \) \\
+\( Body \)   & \( \rightarrow \) & \( Prim*\ Fork \) \\
+\( Prim \)   & \( \rightarrow \) & \( PrimCall\ |\ PrimForeign \) \\
+\( Fork \)   & \( \rightarrow \) & \( Var\ Body* \) \\
+\end{tabular}
+\caption{LPVM Implementation Data Type}
+\label{fig:lpvm_data_type}
+\end{figure}
 
-Wybe is a new programming language that exhibits both declarative and
-imperative paradigms. It wants to incorporate all the good ideas of both and
-still be simple to learn. Wybe is statically typed with a strong preference for
-interface integrity. Interface integrity involves depicting all the inputs and
-outputs, along with side-effects in the function or procedure prototype. By
-forcing the information flow to be explicit, Wybe makes it easy to determine
-the purity of the function just through a function or procedure prototype. The
-Wybe as a language is still under construction, with new good ideas being
-tested every now and then.
-
-With Wybe, a module is equivalent to a wybe source file. The module name is
-same as the source file without the extension. The module's interface consists
-of the public functions and procedures in the module. There is also a separate
-syntax to declare sub-modules inside the full file module. Sub-module names are
-qualified with the outer modules' name. For example a module \textit{A.B.C} is
-the sub-module of \textit{A.B}, which is a sub-module of \textit{A}, which is
-the module of the source file \textit{A.wybe}. Defining new types also creates
-a new sub-module.
-
-
-Procedures in Wybe can be polymorphic. Multiple Wybe procedures can have the
-same name but with different paramter types and modes. This enables procedures
-with multiple modes, similar to Prolog. For example, a procedure to add two
-numbers can have the following definitions: \textit{add(x, y, ?z)},
-\textit{add(x, ?y, z)}, \textit{add(?x, y, z)}. The call \textit{add(3, ?t, 5)}
-will evaluate \textit{t} to be \textit{2}. This selection is done in the Type
-checking pass, which matches calls to the definition with the correct types and
-modes.
+The Figure~\ref{fig:lpvm_data_type} shows the algebraic data type used to hold
+the LPVM IR. This representation has wybe sensitive information like wybe types
+and module definitions stripped away for easier discussion. The actual
+implementation will be looked at again in a latter chapter.
 
 
+In the LPVM implementation used by the Wybe compiler every goal is a primitive
+procedure call. At the most basic level these are similar to primitive machine
+instructions. This again simplifies code generation. As mentioned above,
+instead of having duplication of clause bodies the guard goals currently result
+in a fork of bodies. Generation of two complementary clauses similar to the
+LPVM specifications in the paper is trivial from this tree structure.
 
 
-\section{Compilation of Wybe}
+All loops and conditionals are un-branched by generating new procedures which
+are involved in recursion. The calls are tail calls and hence the code
+generation will have to ensure tail call optimisation is enabled. Simple
+conditionals like if conditions, just generate a fork in the body. The
+alternate destinations, say \textit{Body A} and \textit{Body B}, are stored in a
+list in the \textit{Fork}. Since the \textit{Fork} is at the end of a clause
+\textit{Body}, the remaining body (after the If statement) is placed in a new
+generated procedure. This generated procedure is called at the end of
+\textit{Body A} and \textit{Body B}.
 
-The Wybe syntax tree is slowly transformed to the LPVM IR structure. In this
-process it undergoes flattening, type checking, un-branching, and a final
-clause generation pass to obtain a structure similar to
-Figure~\ref{fig:lpvm_data_type}. Variables in Wybe can be adorned to explicitly
-define their direction of information flow. A variable can flow in (x), flow
-out (?x), or both ways (!x). The Wybe model of explicit information flow is
-quite similar to the LPVM predicates, making LPVM a good fit for this language,
-or the opposite. During compilation everything is converted to a procedure
-quite early in the pipeline. The functions and expressions are normalised to
-look like a procedure definition along with the flattening step by the
-compiler. The output of the function is simply added as a out flowing parameter
-in its procedure form. Expressions are dealt with in a similar way.  Some
-common conversions are shown in Figure~\ref{fig:wybe_convert_to_proc}.
+% Explain Loops 
 
-Since LPVM primitives are just procedure calls, all Wybe statements are
-gradually reduced to procedure calls too. These primitive procedure calls can
-be calls to other procedures in the module or imported modules (fully qualified
-procedure names), or be foreign calls. The foreign calls are used to indicate
-linking of a foreign object file and its code, for example, the standard
-library makes foreign calls to C, to access system IO. Even though these are
-standard procedure calls to LPVM, it will later become an extern call in LLVM
-to a shared object file. The only difference between a local and a foreign
-procedure call is that the local calls can be in-lined. Otherwise it is just
-another \textit{Prim} in a clause body.
-
-The un-branching pass is when LPVM replaces the remaining conditionals and
-loops with recursion, as shown in the last chapter. 
-
-
-
-\message{ !name(wybe.tex) !offset(-87) }
+\message{ !name(lpvm.tex) !offset(-173) }
