@@ -1,0 +1,50 @@
+\chapter{Code Generation to LLVM}
+
+
+We do not generate machine code directly using LPVM IR. Instead we are hooking
+into the LLVM project so that we are able to compile Wybe programs on multiple
+architectures without duplicated effort. Without the LLVM we would have to
+write code generators for every popular architecture and more. LLVM is a
+popular open source project. A lot of older compilers (and new) are being
+re-targeted to LLVM IR, and the efforts taken previously in making the machine
+code generator efficient is being poured collectively into LLVM.
+
+The LLVM IR has an abstract structure of an imperative program, and is a SSA
+based form. Earlier we talked about how LPVM IR solves the drawbacks of the
+using SSA naming scheme and virtual functions, and yet we are ultimately
+targeting a SSA based IR. We do this based on the observations that we are
+doing majority of our optimisation and program analysis in the LPVM stage, and
+the simplified LPVM form does not need the \phif to be present in the LLVM
+IR. In its final stage, LPVM procedure body primitives behave like calls to
+other procedures or virtual instruction calls. Generating LLVM IR on these
+bodies is very direct.
+
+Being imperative means we have to transform each LPVM procedure into a
+function. Wybe and LPVM IR support procedures with multiple outputs, but
+functions don't. This flexibility should be reflected in the LLVM IR as
+well. Having multiple outputs are an abstraction of placing values in multiple
+registers at the end of the execution of a procedure body. In LLVM each
+register is virtually reflected by a variable name or an aggregate
+structure. We wrap the multiple values which are to be returned by a procedure
+in a register structure. The values are unwrapped in the body of the caller in
+the same order.
+
+The virtual instruction calls in LPVM are in the form of \textit{foreign}
+procedure calls. An example is \textit{foreign llvm add(a:int, b:int,
+  ?c:int)}. This refers to the LLVM IR instruction \textit{add} which adds
+two integers. LLVM instructions are function calls. Transforming a procedure
+call to a function call is quite trivial in most scenarios. The function call
+version for the above example is: \textit{c = add i32 a, b} (actual variable names
+look much different in LPVM and LLVM).
+
+LPVM replaces branching and jumps with procedure calls. These are tail
+calls. For LLVM IR to generate efficient machine code, it is extremely
+important to ensure that the LLVM tail call optimisation is turned on. This
+requires turning on certain flags in the \textit{call} instruction generated
+in LLVM IR, and ensuring the call is indeed a tail call in the imperative
+function body representation of the procedure.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:

@@ -36,16 +36,19 @@
 The Wybe syntax tree is slowly transformed to the LPVM IR structure. In this
 process it undergoes \textit{flattening}, \textit{type checking},
 \textit{un-branching}, and a final clause generation pass to obtain a structure
-similar to Figure~\ref{fig:lpvm_data_type}. The type which stores the
-implementation of a Wybe procedure, in source and LPVM form, is shown in
-Figure~\ref{fig:proc_impln}. A procedure definition \textit{ProcDef} will also
-contain other information about the callers, visible types, and more. A
-procedure can have multiple implementation, each implementation corresponding
-to a different \textit{Clause} of the procedure. Initially a \textit{ProcImpln}
-will be composed from the constructor \textit{ProcDefSrc}, indicating source
-language form. On transformation to LPVM, the same type will have the
-constructor \textit{ProcDefPrim}. The \textit{Proto} and \textit{Body} are
-similar to the constructors in Figure~\ref{fig:lpvm_data_type}.
+similar to Figure~\ref{fig:lpvm_data_type}. Once the LPVM structure is
+obtained, we can run optimisation passes over it.
+
+The type which stores the implementation of a Wybe procedure, in source and
+LPVM form, is shown in Figure~\ref{fig:proc_impln}. A procedure definition
+\textit{ProcDef} will also contain other information about the callers, visible
+types, and more. A procedure can have multiple implementation, each
+implementation corresponding to a different \textit{Clause} of the
+procedure. Initially a \textit{ProcImpln} will be composed from the constructor
+\textit{ProcDefSrc}, indicating source language form. On transformation to
+LPVM, the same type will have the constructor \textit{ProcDefPrim}. The
+\textit{Proto} and \textit{Body} are similar to the constructors in
+Figure~\ref{fig:lpvm_data_type}.
 
 The compiler implementation keeps the pipeline modular. While the module
 implementations are stored in a \textit{List} data structure, it is possible to
@@ -56,6 +59,8 @@ made jumping into and out of module implementations more costly since these
 operations are done multiple times during a pass. This also makes loading and
 removing module implementations in the pipeline very easy, assisting the
 incremental features later.
+
+
 
 \subsection{Flattening Pass}
 
@@ -109,8 +114,36 @@ generated procedures to act as branching blocks, as described in the chapter on
 LPVM.
 
 
+\subsection{Clause Generation Pass}
 
-% talk about inlining 
+By this pass the LPVM structure is more or less completed. The Wybe source
+semantics have been encapsulated in the LPVM IR, at least what is needed. The
+implementations for all the flattened clauses of the procedures will have the
+constructor \textit{ProcDefPrim} applied, with the LPVM prototype and body
+primitives put in its place. Further optimisation passes will work on this
+structure until code generation.
 
 
+\subsection{Expansion Pass}
 
+An early optimisation that makes use of the LPVM structure is the in-lining of
+calls. This pass takes place on the clausal or LPVM form (\textit{ProcDefPrim}
+constructor in the implementation). LPVM makes heavy use of procedure calls
+since every form of branching is essentially replaced with procedure
+calls. In-lining bodies of \textit{callee} procedures removes most of these
+procedure call overheads. The decision to inline or not is based on a cost vs
+benefit analysis. This analysis takes into consideration the number of callers
+to that procedure, it's arguments, and body size. 
+
+In-lining benefits are only decidable if we have the LPVM clause form for that
+procedure. The structure of LPVM procedures is much more flat and limited as
+compared to Wybe source code, making copying procedure bodies easier, and the
+decision to do so more fine grained. This is one of the benefits of having LPVM
+forms of all modules involved in compilation in the compiler pipeline, and will
+be reflected in the incremental features later.
+
+As an example, most of Wybe standard library types like \textit{int}
+,\textit{bool}, \textit{float}, have simple primitive procedures for binary
+operations. The implementation bodies for these procedures are just a single
+foreign instruction call to LLVM instructions. These will definitely be
+in-lined and in code generation phase will turn into a single LLVM instruction.
