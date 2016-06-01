@@ -1,62 +1,77 @@
 \chapter{Introduction}
 
+This thesis presents an incremental and work-saving compiler which utilises a
+newly proposed logic programming based intermediate representation, called
+\textbf{LPVM}, in its pipeline. The compiler itself compiles a new
+multi-paradigm source language called \textbf{Wybe} (pronounced
+\textit{Wee-buh}). The compiler eventually targets the \textbf{LLVM} compiler
+framework which allows the compiler to be flexible in targeting multiple modern
+targets, and provide a working implementation. Ideas explored in this thesis
+are stemmed from the motive of achieving efficiency in a compilation pipeline
+by avoiding redoing any work done before. The source language Wybe is a
+complete full featured language targeted at being easy to learn and being
+suitable for production use. While the use LPVM itself provides us plenty of
+benefits in program analysis and optimisation, we also exploit its structure to
+achieve incremental features in our compiler. This will push Wybe to be even
+more suitable for large scale projects.
 
-This thesis explores using a logical intermediate representation (IR) in a
-incremental compiler pipeline for a new declarative and imperative mixed
-paradigm source language. This logical IR is called LPVM, and its simple
-clausal structure enables logical programming analysis and easier
-optimisations. It lies middle of the compilation pipeline, before an LLVM
-generation stage, making it a middle level IR. Using this representation, we
-can also make the compiler incremental and have a lazy build system which tries
-to avoid re-compilation as much as it can. Even though having multiple IR
-stages and forms adds extra work in the compilation process (and compiler
-construction), we show a simple transformation of LPVM to LLVM, so that the
-compiler is able to target all the machines LLVM can realistically.
+The choice of the intermediate representation to use in the compiler is an
+important one. It is the data structure which abstractly holds the source code
+semantics, while being machine independent. It undergoes many optimisation
+passes which may or may not alter its structure, and can be targeted to any
+architecture for code generation eventually. The choice of the IR structure
+also makes certain program analyses easier than the rest, or even enables some
+which other structures might not allow. The \textit{Dragonbook} talks about the
+existence of multiple IR forms between the source code and the machine
+code. IRs which resemble source code semantics more closely are deemed to be on
+a higher level than the ones which have a closer resemblance to the machine
+code. An IR will strip away information it does not need anymore, or
+information that it has utilised completely, and transform to a simpler lower
+level form. In our pipeline we have two IRs. The \textbf{LPVM IR} form is
+generated from the source program in Wybe, and the \textbf{LLVM IR} form is
+generated from the final LPVM IR form. All the major optimisation and
+analysis passes happen on the LPVM form. The LLVM form is generated on a
+simplified version of LPVM (after optimisation) and is just needed so that we
+can generate machine code without duplicating effort. 
 
-The source language is called Wybe. It's a new language which aims to unify
-the good parts of declarative and imperative languages. Having a mixture of
-paradigms makes it a good fit for a compilation pipeline which involves a
-mixture of paradigms as well. 
+% talk about LPVM
+LPVM IR is the implementation of the logic programming IR form given in
+\cite{lpvm2015}. The term \textit{LPVM} is an abbreviation for \textit{Logic
+  Program Virtual Machine}, and named so in a similar fashion to
+\textit{LLVM}. They are not really virtual machines. LPVM has an incredibly
+simple IR structure and makes it really easy to for reasoning with different
+program analysis techniques. It also allows the use of powerful logic
+programming analysis. In this thesis, the focus is more on exploring the
+structural benefits of LPVM in being incremental, rather than its proposed and
+possible optimisation techniques.
 
-The data structure of an Intermediate representation is an important factor in
-deciding what optimisation passes are going to be useful. Different compilers
-usually have their own IR, which maybe only slightly different from other
-IRs. The actual form is really a compiler construction choice. There are
-efforts to build a universal IR, like the LLVM project, but a reasonably
-complex language would have it's own unique requirements which can't be
-accounted for in a single universal IR or form. The IR generation stage in a
-compiler pipeline goes through multiple optimisation passes. There is no
-restriction on the form of the IR as it moves through these passes. In fact
-having multiple IR forms, which gradually transform from being closer to the
-source language to a more machine dependent form is quite common. Multiple
-forms opens up multiple approaches to optimisations. 
+The Wybe language compiler is called \textbf{Wybemk} (pronounced
+\textit{Wee-buh-mik}). It is a combination of \textit{Wybe} and
+\textit{Make}. To support our incremental features, we need to embed certain
+information on a compilation into the object files the compiler creates. These
+object files are the same as the architecture specific object files, but with
+extra docile information usable by Wybemk. Another focus of the Wybe compiler
+is to have a build system ingrained into the compiler. We try to mimic the gnu
+\textit{Make} utility with some simplifications.
 
-Mid level IRs, quit simply lie in between some high level IR or source code and
-a low level IR. We insert LPVM into the compilation pipeline as a mid level
-IR between the source code and the LLVM IR. In a way, our target code is the
-LLVM IR. Even though LLVM code generation comes with it's own set of curated
-and tested optimisations, its main use here is to avoid the need to account for
-every architecture. Thus we can focus on maximising the usefulness of
-LPVM. We also show how the clausal form of LPVM can be easily translated to the
-more imperative block style of LLVM.
+% Write outline of the thesis
 
-The Wybe compiler wants to be lazy and incremental. It wants to avoid as much
-recompilation as it can. The object files Wybe compiler builds have enough
-information to be used in place of a source file, while at the same time
-provide inalienable code which could only have been obtained from the source
-code. The simple clausal semantics of LPVM is the key to this. To be more
-incremental, the compiler maps and tracks the source code semantic structures
-to LPVM clauses. For re-compilation, it tries to load the already compiled
-clauses stored in the object files for any trivial changes of the source. 
-
-Another focus of the Wybe compiler is to have a build system ingrained into the
-compiler. We try to mimic the gnu make utility with some simplifications, and
-hence our Wybe compiler is usually run through the command `wybemk` (Wybe
-make). Instead of having a separate make file, the Wybemk command just takes a
-target name, infers the dependency chains and the list of files to compile and
-link and makes the target. We wanted to have the ability to link in foreign
-source object files and not just Wybe source files. 
+The rest of the thesis presents the research and work done to build the
+incremental compilation pipeline for Wybe. The sections try to follow the stages of
+the compilation in order. In Chapter~\ref{chap:literature_review} we discuss
+the literature explored to build the compiler, including discussion on the
+important papers which form a base for this thesis. In Chapter~\ref{chap:lpvm}
+we present the implementation of LPVM used in the compiler. In
+Chapter~\ref{chap:wybe}, an introduction to the Wybe programming language is
+given, and in Chapter~\ref{chap:wybe_to_lpvm} its transformation to LPVM is
+discussed. Having described the structure of the source language, LPVM, and its
+representation in the compiler, we present our incremental and work saving
+build system, Wybemk, in Chapter~\ref{chap:build_system}. Finally we discuss
+code generation to LPVM in Chapter~\ref{chap:codegen_llvm}.
 
 
 
-Why use a logical IR?
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:

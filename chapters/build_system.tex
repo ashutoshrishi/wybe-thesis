@@ -1,4 +1,5 @@
 \chapter{Wybemk, Compiler and Build System}
+\label{chap:build_system}
 
 \textbf{Wybemk} is the incremental compiler and a Make utility combined
 together in one executable for Wybe source code. It is modelled after the GNU
@@ -166,11 +167,11 @@ optimisation. Serialising the LPVM form instead of the source code form already
 saves a lot of space, having extra space saving heuristics is a bonus. The
 exportable \textit{Module} subset is serialised as a byte string. A LPVM
 primitive is made up of either of two constructors
-(Figure~\ref{lpvm_data_type}): \textit{PrimCall} or \textit{PrimForeign}. This
-keeps the tag byte size small for serialising a procedure body. Even the
-procedure LPVM implementation is made up of only one constructor:
-\textit{ProcDefPrim}. The tag byte contains flag type information to identify
-which constructor to use while decoding.
+(Figure~\ref{fig:lpvm_data_type}): \textit{PrimCall} or
+\textit{PrimForeign}. This keeps the tag byte size small for serialising a
+procedure body. Even the procedure LPVM implementation is made up of only one
+constructor: \textit{ProcDefPrim}. The tag byte contains flag type information
+to identify which constructor to use while decoding.
 
 
 
@@ -215,14 +216,21 @@ their order in the file changes nothing.
 
 % Change this part it's rubbish 
 
-We want Wybe procedures and functions to be the atomic components of a
-module. If one procedure is changed, the only parts that should be recompiled
-is that procedure itself and some other affected procedures (due to inlining or
+An easy choice of granularity for the Wybemk compiler is a Wybe procedure or
+function. As shown in chapter~\ref{chap:wybe_to_lpvm}, a Wybe procedure or
+function is flattened to a procedure form very early in the compilation
+pipeline. The dependency resolution is then narrowed to tracking the
+relationship of these flattened procedures to the LPVM procedures they are
+transformed to. A flattened Wybe procedure can be transformed to one or more
+LPVM procedure.
+
+If one procedure is changed, the only parts that should be recompiled is that
+procedure itself and some other affected procedures (due to inlining or
 calls). We can check for edits at the parse tree level (in Wybe form) or when
 the LPVM form is generated (before optimisation passes). Checking the Wybe
 source form coincides with the parse tree hashing we are doing above. Every
 Wybe function or procedure is flattened to be a procedure, so when we talk
-about procedures, we are considering all top level items in the module. 
+about procedures, we are considering all top level items in the module.
 
 If we change a variable name uniformly throughout a procedure body, it's LPVM
 form would not change since LPVM will be generating it's own unique variable

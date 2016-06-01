@@ -1,4 +1,5 @@
 \chapter{Implementation of LPVM}
+\label{chap:lpvm}
 
 The actual implementation of the LPVM structure differs a bit from the abstract
 structure proposed in \cite{lpvm2015}. For a guard goal, the abstract
@@ -92,8 +93,9 @@ they contain are the procedure name and the signature. These can be used to
 refer to source language procedures or machine code (or LLVM) instructions just
 as easily. Local calls look like: \textit{factorial(tmp\$10: int, ?tmp\$3:
   int)}, and foreign calls look like: \textit{foreign llvm mul(tmp\$2: int, 9:
-  int, ?tmp\$3: int)}. The compiler will decide what code to generate for a
-given \textit{Prim}.
+  int, ?tmp\$3: int)}, where the term \textit{llvm} specifies the group which
+can possibly provide an instruction for the call. The compiler will decide what
+code to generate for a given \textit{Prim}.
 
 Conditional statements or goals partition a clause body as discussed above. But
 a loop conditional can't just do that as it would require a a jump back into a
