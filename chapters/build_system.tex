@@ -3,23 +3,22 @@
 
 \textbf{Wybemk} is the incremental compiler and a Make utility combined
 together in one executable for Wybe source code. It is modelled after the GNU
-Make utility, but doesn't need an explicit \textit{Makefile} to make Wybe
-source files. The Wybemk compiler just needs the name of a target to build, and
-it will infer the building and linking order. Targets include architecture
-dependant relocatable object files, LLVM bitcode files, or a final linked
-executable. The object files and bitcode files that Wybemk builds are a little
-different than what other utilities create. They have embedded information that
-assists a future compilation processes in being incremental. It is this
-embedding that allows Wybemk to be an incremental and work-saving compiler.
+Make utility \citep{make}, but doesn't need an explicit \textit{Makefile} to
+make Wybe source files. The Wybemk compiler just needs the name of a target to
+build, and it will infer the building and linking order. Targets include
+architecture dependant relocatable object files, LLVM bitcode files, or a final
+linked executable. The object files and bitcode files that Wybemk builds are a
+little different than what other utilities create. They have embedded
+information that assists a future compilation processes in being
+incremental. It is this embedding that allows Wybemk to be an incremental and
+work-saving compiler.
 
-The elementary work saving features are very similar to what the GNU Make does.
-It does not want to rebuild any object file which is already built and is newer
-than its corresponding source file. But by doing so, the LPVM form and analysis
-for that module is also skipped. This is acceptable for only intra module
-optimisations, since the final optimised object code will be the same. But we
-might be missing a lot of inter module optimisation opportunities and LPVM
-inlining that other dependant modules can reap benefits from. Object files
-store a symbol table which will list all the callable function names in
+By not building a target object file when the source is older, the LPVM form
+and analysis for that module is also skipped. This is acceptable for only
+intra-module optimisations, since the final optimised object code will be the
+same. But we might be missing a lot of inter module optimisation opportunities
+and LPVM inlining that other dependant modules can reap benefits from. Object
+files store a symbol table which will list all the callable function names in
 it. This is what the \textit{linker} uses to resolve extern calls during
 linking. The body of these functions are stored in object code form. We can't
 make a decision on inlining these functions into another module from this. It
@@ -68,25 +67,26 @@ segments. Using such such segment we can attempt storage of some useful
 serialised meta-data in the object file. 
 
 Our current implementation has the functionality to parse and embed information
-in \macho object files. The \macho file format is the Application Binary
-Interface (ABI) format that the OS X operating system uses for its object
-files. An ABI describes the byte ordering and their meaning for the operating
-system in this case. The embedded bytes do not interfere in any semantics of
-the object file. It still appears as an ordinary object file to every other
-machine utility or parser, like the tools \textit{ld}, and \textit{nm}. The
-only aspect which noticeably changes is it's total byte size.
+in \macho object files and \textit{bitcode} files. The \macho file format is
+the Application Binary Interface (ABI) format that the OS X operating system
+uses for its object files. An ABI describes the byte ordering and their meaning
+for the operating system in this case. The embedded bytes do not interfere in
+any semantics of the object file. It still appears as an ordinary object file
+to every other machine utility or parser, like the tools \textit{ld}, and
+\textit{nm}. The only aspect which noticeably changes is it's total byte size.
 
 
 \subsection{Mach-O Object File Format}
 
 Quite simply, an object file is a long byte string sequence. Referring to the
-Apple documentation on their format, we are able to parse and edit the \macho
-byte structure. The first 32 bits or 4 bytes are considered to be the magic
-number if read in little endian format. The magic number constant determines
-what kind of ABI the rest of the bytes of the file follow and their
+Apple documentation\footnotemark on their format, we are able to parse and
+edit the \macho byte structure. The first 32 bits or 4 bytes are considered to
+be the magic number if read in little endian format. The magic number constant
+determines what kind of ABI the rest of the bytes of the file follow and their
 ordering. On OS X we can have 32 bit and 64 bit \macho object files and
 Universal binaries. Universal binaries or Fat archives contain more than one
 object file. Wybemk is interested in \macho object files.
+
 
 The header bytes of the identified structure will give the number of load
 commands the file contains. The load commands are the segments which get loaded
@@ -106,7 +106,28 @@ found on most \textit{UNIX} OS, to add new segments and sections. Other object
 file formats, like the \textit{Elf} format for Linux, can be used for embedding
 this way. This is part of our future planned work.
 
+\footnotetext{ Documentation \url{https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/MachORuntime/}}
 
+\subsection{Bitcode Wrapper}
+
+LLVM IR can be put in \textit{bitcode} files\footnotemark. These are binary
+representations of the LLVM IR it encodes. These files are identified by a
+magic number, similar to a \macho file. LLVM tools can easily generate these
+formats and even compile them to object file and link them. In a way they are a
+machine architecture independent version of object files and can be easily
+distributed between compilers which support LLVM. It provides great
+interoperability. Hence we want to have the option to utilise them in a similar
+fashion to how we utilise object files.
+
+A \textit{bitcode} wrapper differs from an ordinary \textit{bitcode} file in
+its initial magic number. This wrapper format specifies a header which should
+give the byte offset of the byte string representation of the LLVM IR it
+holds. The rest of the bytes after the header and before the offset are
+therefore free to embed information. We use this space to store our LPVM
+information which usually goes into the object file.
+
+
+\footnotetext{ See \url{http://llvm.org/docs/BitCodeFormat.html}}
 
 
 \section{Incremental Compilation}
@@ -203,7 +224,7 @@ those parts while re-doing the other parts provide a faster compilation
 time. In our current iteration of the compiler we are applying hash comparisons
 at two stages: after parsing, and just before the LPVM optimisation passes.
 
-A very trivial hash to store is the hash of the parse tree generated by the
+After parsing we can store the hash of the parse tree generated by the
 parser. When the parser finishes its work, Wybemk can hash its AST and compare
 it with the hash of the previous AST. For source code edits involving changing
 or adding comments and white-space, the parse tree doesn't change even though
@@ -214,15 +235,17 @@ to this check is considering procedure, functions, and other top level items
 without order, so that that they all are individually checked and changing
 their order in the file changes nothing.
 
-% Change this part it's rubbish 
+% Change this part it's rubbish
+Completely change this last part.
 
-An easy choice of granularity for the Wybemk compiler is a Wybe procedure or
+The choice of granularity for the Wybemk compiler is a Wybe procedure or
 function. As shown in chapter~\ref{chap:wybe_to_lpvm}, a Wybe procedure or
 function is flattened to a procedure form very early in the compilation
 pipeline. The dependency resolution is then narrowed to tracking the
 relationship of these flattened procedures to the LPVM procedures they are
-transformed to. A flattened Wybe procedure can be transformed to one or more
-LPVM procedure.
+transformed to. A Wybe \textit{procedure A} depends on \textit{procedure B}, if
+it contains a call to \textit{B}. Flattened Wybe procedure can be transformed
+to one or more LPVM procedure.
 
 If one procedure is changed, the only parts that should be recompiled is that
 procedure itself and some other affected procedures (due to inlining or
@@ -243,6 +266,7 @@ predicate or procedure. This happens for conditional branching and loops. This
 mapping has to be tracked so that we know which LPVM procedures to load in.
 
 %%% Local Variables:
+%%% reftex-default-bibliography: ("../refs.bib")
 %%% mode: latex
 %%% TeX-master: "../thesis"
 %%% End:

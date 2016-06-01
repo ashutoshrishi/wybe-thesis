@@ -6,9 +6,13 @@
   \begin{tabular}{r c l}
 
     \( func\ factorial(n:int):int \) & \(\rightarrow \) & 
-                                                          \( proc\ factorial(n:wybe.int, ?\verb+$+:wybe.int) \) \\
+                                                          \( proc\ factorial(n:int, ?\verb+$+:int) \) \\
     \( ?c = bar(a, b) \) & \(\rightarrow\) & \( bar(a, b, ?c) \) \\
     \( ?y = f(g(x)) \) & \(\rightarrow\) & \( g(x, ?temp)\ f(temp, ?y) \) \\
+    \( proc\ greet(s:string)\ use\ !io \) & \(\rightarrow\) &
+                                                           \( proc\
+                                                           greet(s:string,
+                                                           \#0:io, ?\#1:io) \)
 
 
   \end{tabular}
@@ -65,6 +69,16 @@ operations are done multiple times during a pass. This also makes loading and
 removing module implementations in the pipeline very easy, assisting the
 incremental features later.
 
+
+Since LPVM procedure signatures should also present a pure interface like Wybe,
+Wybe \textit{resources} are passed as a new parameter to the procedure. There
+is no explicit syntax since \textit{resources} are a Wybe syntax
+feature. Hence, if a Wybe procedure uses the \textit{io} resource, its
+corresponding LPVM clause will have an extra input and output parameter of the
+\textit{io} type. This would mean that the LPVM procedure takes in an
+\textit{io}, works on it, modifies it, and returns it. In a later pass, these
+common extra resource parameters could be optimised to point to just one common
+memory location.
 
 
 \subsection{Flattening Pass}
@@ -143,9 +157,13 @@ to that procedure, it's arguments, and body size.
 In-lining benefits are only decidable if we have the LPVM clause form for that
 procedure. The structure of LPVM procedures is much more flat and limited as
 compared to Wybe source code, making copying procedure bodies easier, and the
-decision to do so more fine grained. This is one of the benefits of having LPVM
-forms of all modules involved in compilation in the compiler pipeline, and will
-be reflected in the incremental features later.
+decision to do so more fine grained. For a procedure body to replace its call,
+the variables in the body have to be renamed while pasting. This renaming
+process is simpler with LPVM procedures since they list their input and output
+variables in the signature, and just these will have to be renamed. In-lining
+is one of the benefits of having LPVM forms of all modules involved in
+compilation in the compiler pipeline, and will be reflected in the incremental
+features later.
 
 As an example, most of Wybe standard library types like \textit{int}
 ,\textit{bool}, \textit{float}, have simple primitive procedures for binary

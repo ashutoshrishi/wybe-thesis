@@ -1,4 +1,4 @@
-\chapter{Literature Review}
+\chapter{Literature}
 \label{chap:literature_review}
 
 % describe the outline of the chapter and the papers discussed
@@ -20,6 +20,12 @@ discussed in section~\ref{sec:cpp_compiler}.
 
 
 % paper on make and paper no 44
+It's always useful to have a build system in-built in the compiler. The Wybemk
+compiler tries to emulate the famed GNU \textit{Make} \citep{make} build
+system, but without a \textit{Makefile}. The target is passed on the command
+line and the build happens only when the source file is newer than the target
+in its file modification time. Internally a dependency graph is generated, like
+\textit{Make} and a depth first traversal is done for building dependencies. 
 
 
 % LLVM
@@ -221,6 +227,7 @@ same entity is saved over the old one. The time stamp changes but structurally
 nothing has changed.
 
 %%% Local Variables:
+%%% reftex-default-bibliography: ("../refs.bib")
 %%% mode: latex
 %%% TeX-master: "../thesis"
 %%% End:

@@ -8,6 +8,8 @@
     "gsa"
     "appelfp"
     "cpp_compiler"
-    "Lattner:MSThesis02"))
+    "Lattner:MSThesis02"
+    "irnote"
+    "make"))
  :bibtex)
 

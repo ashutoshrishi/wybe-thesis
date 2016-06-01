@@ -21,18 +21,18 @@ semantics, while being machine independent. It undergoes many optimisation
 passes which may or may not alter its structure, and can be targeted to any
 architecture for code generation eventually. The choice of the IR structure
 also makes certain program analyses easier than the rest, or even enables some
-which other structures might not allow. The \textit{Dragonbook} talks about the
-existence of multiple IR forms between the source code and the machine
-code. IRs which resemble source code semantics more closely are deemed to be on
-a higher level than the ones which have a closer resemblance to the machine
-code. An IR will strip away information it does not need anymore, or
-information that it has utilised completely, and transform to a simpler lower
-level form. In our pipeline we have two IRs. The \textbf{LPVM IR} form is
-generated from the source program in Wybe, and the \textbf{LLVM IR} form is
-generated from the final LPVM IR form. All the major optimisation and
-analysis passes happen on the LPVM form. The LLVM form is generated on a
-simplified version of LPVM (after optimisation) and is just needed so that we
-can generate machine code without duplicating effort. 
+which other structures might not allow. There can multiple IR forms between the
+source code and the machine code \citep{irnote}. IRs which resemble source code
+semantics more closely are deemed to be on a higher level than the ones which
+have a closer resemblance to the machine code. An IR will strip away
+information it does not need anymore, or information that it has utilised
+completely, and transform to a simpler lower level form. In our pipeline we
+have two IRs. The \textbf{LPVM IR} form is generated from the source program in
+Wybe, and the \textbf{LLVM IR} form is generated from the final LPVM IR
+form. All the major optimisation and analysis passes happen on the LPVM
+form. The LLVM form is generated on a simplified version of LPVM (after
+optimisation) and is just needed so that we can generate machine code without
+duplicating effort.
 
 % talk about LPVM
 LPVM IR is the implementation of the logic programming IR form given in
