@@ -21,38 +21,18 @@ other procedures or virtual instruction calls. Generating LLVM IR on these
 bodies is very direct. We take a deeper look at these conversions in
 section~\ref{sec:lpvm_to_llvm}.
 
-% talk about garbage collection and linking
-
+Using the compiler tools provided by LLVM framework, we can create object code
+from the IR easily. For accessing instructions not provided by LLVM, we link in
+a shared C library. Since the C compiler \textit{clang} compiles C using LLVM,
+we can either join the LLVM form of this library with ours or just using the
+system linker to link object files. Using this library we can provide a
+stronger support for compound types, as discussed in
+section~\ref{sec:type_codegen}.
 
 
 \section{Transforming LPVM to LLVM}
 \label{sec:lpvm_to_llvm}
 
-\begin{figure}
-    \begin{align*}
-      \mathbf{gc}\mathbf{d}(a,b,?ret) & \rightarrow \\
-          & foreign\ \mathbf{llvm}\ \mathrm{icmp}\ \mathrm{ne}(b,0,?tmp1) \\
-          & case\ \mathrm{tmp1}\ of \\
-      0:\ & foreign\ \mathbf{llvm}\ \mathrm{move}(0,?ret) \\
-      1:\ & foreign\ \mathbf{llvm}\ \mathrm{urem}(a,b,?b') \\
-          &  gcd(a,b',?ret) \\
-    \end{align*}
-\begin{Verbatim}[frame=lines,label=LLVM,labelposition=topline,
-framesep=4mm,fontsize=\small,commandchars=\\\{\}]
-define i64 @gcd(i64 %a, i64 %b) \{
-  %0 = icmp ne i1 %b, 0 
-  br i1 %0, label %if.then, label %if.else
-if.then:
-  %1 = urem i64 %a, %b
-  %2 = tail call i64 @gcd(i64 %a, i64 %1)
-  ret %2
-if.else:
-  ret i64 0
-\}
-\end{Verbatim}
-  \caption{Transformation of the LPVM form of \textit{GCD} to LLVM}
-  \label{fig:lpvm_to_llvm}
-\end{figure}
 
 Since LLVM is based on an imperative form, we have to transform each LPVM
 procedure back into an imperative function. Wybe and LPVM IR support procedures
@@ -100,8 +80,56 @@ optimisation is turned on. This requires turning on certain flags in the
 a tail call in the imperative function body representation of the procedure.
 
 
-\section{Garbage Collection}
+\begin{figure}
+    \begin{align*}
+      \mathbf{gc}\mathbf{d}(a,b,?ret) & \rightarrow \\
+          & foreign\ \mathbf{llvm}\ \mathrm{icmp}\ \mathrm{ne}(b,0,?tmp1) \\
+          & case\ \mathrm{tmp1}\ of \\
+      0:\ & foreign\ \mathbf{llvm}\ \mathrm{move}(0,?ret) \\
+      1:\ & foreign\ \mathbf{llvm}\ \mathrm{urem}(a,b,?b') \\
+          &  gcd(a,b',?ret) \\
+    \end{align*}
+\begin{Verbatim}[frame=lines,label=LLVM,labelposition=topline,framesep=4mm,fontsize=\small,commandchars=\\\{\}]
+define i64 @gcd(i64 %a, i64 %b) \{
+  %0 = icmp ne i1 %b, 0 
+  br i1 %0, label %if.then, label %if.else
+if.then:
+  %1 = urem i64 %a, %b
+  %2 = tail call i64 @gcd(i64 %a, i64 %1)
+  ret %2
+if.else:
+  ret i64 0
+\}
+\end{Verbatim}
+  \caption{Transformation of the LPVM form of \textit{GCD} to LLVM}
+  \label{fig:lpvm_to_llvm}
+\end{figure}
 
+\section{Code generation for Wybe types with LLVM}
+\label{sec:type_codegen}
+
+LLVM provides access to the basic integer type of arbitrary bit precision. We
+are considering an \textit{int} to be of the machine word size, which is more
+commonly \textit{i32} or \textit{i64}. LLVM also has floating point
+types. Using these we can model all of Wybe's basic types as shown in
+chapter~\ref{chap:wybe}. Compound types and Abstract data types require an
+interface to the heap. An elementary way to do this is use LLVM function calls
+to make calls to C's \textit{stdlib}. Namely calls to \textit{malloc} and
+\textit{free}. LLVM's instruction \textit{getelementptr} can index allocated
+memory in the heap. But we also want to make headway into providing garbage
+collection in the compiler. Without providing a complete solution, we can still
+access dynamic garbage collection by making use of the \textit{Boehm
+  GC}. Accessing the C library version of this through the shared library we
+link in later, we can use the replacement function for \textit{malloc}, called
+\textit{gc\textunderscore malloc} to enable the Boehm garbage collector to automatically
+collect memory. To use these calls, LPVM generates \textit{foreign} calls in
+the \textit{lpvm} group: \textit{foreign lpvm alloc(8:int, x:vector)}, where
+\textit{vector} is an example new type name.
+
+For algebraic data types, the compiler will determine the byte sizes (or word
+sizes) for every type constructor used and will generate access and mutate
+calls accordingly. Both classes of procedure calls translate to a combination
+of LLVM \textit{getelementptr}, \textit{store}, \textit{access} functions. 
 
 
 %%% Local Variables:

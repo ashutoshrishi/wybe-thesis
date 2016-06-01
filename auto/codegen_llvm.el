@@ -11,6 +11,7 @@
    (LaTeX-add-labels
     "chap:codegen_llvm"
     "sec:lpvm_to_llvm"
-    "fig:lpvm_to_llvm"))
+    "fig:lpvm_to_llvm"
+    "sec:type_codegen"))
  :latex)
 

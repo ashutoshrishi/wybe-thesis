@@ -36,9 +36,13 @@
 
 The Wybe syntax tree is slowly transformed to the LPVM IR structure. In this
 process it undergoes \textit{flattening}, \textit{type checking},
-\textit{un-branching}, and a final clause generation pass to obtain a structure
+\textit{un-branching}, and a final \textit{clause generation} pass to obtain a structure
 similar to Figure~\ref{fig:lpvm_data_type}. Once the LPVM structure is
-obtained, we can run optimisation passes over it.
+obtained, we can run more optimisation passes over it. One such optimisation on
+a complete LPVM form is the \textit{Expansion} pass. This pass explores costs
+and benefits of in-lining procedure bodies for calls, marking calls which
+should be in-lined. In-lining at the LPVM provides a lot of benefits which are
+apparent in the incremental features of the compiler also.
 
 The type which stores the implementation of a Wybe procedure, in source and
 LPVM form, is shown in Figure~\ref{fig:proc_impln}. A procedure definition

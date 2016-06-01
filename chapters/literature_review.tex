@@ -18,8 +18,20 @@ can build our system smoothly. An incremental compiler for C++ given in
 object) level instead of the file (or module) level. Their approach is
 discussed in section~\ref{sec:cpp_compiler}.
 
+
 % paper on make and paper no 44
-% LLVM papers
+
+
+% LLVM
+To produce a working compiler we hook into the LLVM compiler infrastructure
+\citep{Lattner:MSThesis02} by providing a transformation from the LPVM IR to
+the LLVM IR. While not an universal IR, LLVM IR is an excellent target due to
+the amount of work that is being done on its machine code generation. Many
+popular languages like Haskell, Rust, etc. are getting LLVM back-ends for the
+same reason. We won't need to rely on all the optimisation possibilities of
+LLVM since we are reliably doing majority of our program analysis and
+simplifications on LPVM. 
+
 
 \section{Horn Clauses as an Intermediate Representation \citep{lpvm2015}}
 \label{sec:horn_clauses}
@@ -208,3 +220,7 @@ these are effective for propagating change, it may be missing cases when the
 same entity is saved over the old one. The time stamp changes but structurally
 nothing has changed.
 
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:

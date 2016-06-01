@@ -7,6 +7,7 @@
     "cytronSSA"
     "gsa"
     "appelfp"
-    "cpp_compiler"))
+    "cpp_compiler"
+    "Lattner:MSThesis02"))
  :bibtex)
 
