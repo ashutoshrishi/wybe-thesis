@@ -15,6 +15,7 @@
    (LaTeX-add-labels
     "chap:wybe_to_lpvm"
     "fig:wybe_convert_to_proc"
-    "fig:proc_impln"))
+    "fig:proc_impln"
+    "fig:proc_types"))
  :latex)
 

@@ -12,19 +12,19 @@ compilers (and new) are also being re-targeted to LLVM IR, and the efforts
 taken previously in making the machine code generator efficient is being poured
 into LLVM. We feel it's worthwhile to do the same for Wybe.
 
-The LLVM IR has an abstract structure of an imperative program, and is a SSA
+The LLVM IR has an abstract structure of an imperative program. It is a SSA
 based form. Earlier we talked about how LPVM IR solves the drawbacks of the SSA
 naming scheme and its virtual functions, and yet we are ultimately targeting a
-SSA based IR. We do this based on the observations that we are doing majority
-of our optimisation and program analysis in the LPVM stage, and the simplified
+SSA based IR. We do this based on the observation that we are doing majority of
+our optimisation and program analysis in the LPVM stage, and the simplified
 LPVM form does not need the \phif to be present in its LLVM IR
-transformation. In its final stage, basic LPVM procedure bodies end with
-building it's outputs or a fork. This fork does not merge back into another
-block. Instead, every other basic body in the fork will either terminate
-finishing its work or will end in a call to another procedure. With no
-converging bodies, there is no need for using a \phif in LLVM. Generating LLVM
-IR on these bodies is very direct. We take a deeper look at these conversions
-in section~\ref{sec:lpvm_to_llvm}.
+transformation. In its final stage, basic LPVM \textit{clause} bodies end with
+either building it's outputs or a fork. This fork does not merge back into
+another block. Instead, every other basic body in the fork will either
+terminate finishing its work or will end in a call to another procedure. With
+no converging bodies, there is no need of using a \phif in LLVM. Generating
+LLVM IR on these bodies is very direct. We take a deeper look at these
+conversions in section~\ref{sec:lpvm_to_llvm}.
 
 Using the compiler tools provided by LLVM framework, we can create object code
 from the LLVM IR easily. We then use the system linker to link these object
@@ -35,38 +35,38 @@ compiles C using LLVM, we can either join the LLVM form of this library with
 ours or just using the system linker to link object file versions. Using this
 library we can provide a stronger support for compound types which need access
 to heap memory, as discussed in section~\ref{sec:type_codegen}. Finally we
-discuss how we do our dependency linking and deal with top level code for every
-dependency in section~\ref{sec:linking}.
+discuss how Wybemk does its dependency linking and deals with top level code
+for every dependency in section~\ref{sec:linking}.
 
 
 \section{Transforming LPVM to LLVM}
 \label{sec:lpvm_to_llvm}
 
 Since LLVM is based on an imperative form, we have to transform each LPVM
-procedure back to an imperative function. A imperative function and a procedure
-are somewhat similar in that they both have a sequence of imperative statements
-as their body. Wybe and LPVM IR support procedures with multiple outputs, but
-imperative functions do not do so by default. We need the flexibility of
-multiple outputs reflected in the LLVM IR as well. Having multiple outputs is
-an abstraction of placing values in multiple registers at the end of the
-execution of a procedure body. In LLVM each register is virtually reflected by
-a variable name or an aggregate structure. We wrap the multiple values which
-are to be returned by a procedure in a register \textit{structure}. The values
-are unwrapped in the body of the caller in the same order. This aggregate
-structure type is allocated on the stack of the function instead of the heap,
-making it similar to a local variable. The nameless procedure which holds the
-top level statements of the module is transformed to \textit{module.main}
-function. The prefixed module name is used to differentiate from \textit{main}
-functions of other modules.
+procedure back to an imperative function. An imperative function and a
+procedure are somewhat similar in that they both have a sequence of imperative
+statements as their body. Wybe and LPVM IR support procedures with multiple
+outputs, but imperative functions do not do so by default. We need the
+flexibility of multiple outputs reflected in the LLVM IR as well. Having
+multiple outputs is an abstraction of placing values in multiple registers at
+the end of the execution of a procedure body. In LLVM each register is
+virtually reflected by a variable name or an aggregate structure. We wrap the
+multiple values which are to be returned by a procedure in a register
+\textit{structure}. The values are unwrapped in the body of the caller in the
+same order. This aggregate structure type is allocated on the stack of the
+function instead of the heap, making it similar to a local variable. The
+nameless procedure which holds the top level statements of the module is
+transformed to a \textit{module.main} function. The prefixed module name is
+used to differentiate from \textit{main} functions of other modules.
 
 % describe the LLVM form here
 The LLVM IR looks like a C program. At the top level, it contains
-\textit{declare} statements (to refer to an extern function or global constant)
-and \textit{functions}. A function has a return type and parameters defined
-exactly like a C function. Void functions are acceptable. The body of a
+\textit{declare} statements (to refer to an extern function or some global
+constant) and \textit{functions}. A function has a return type and parameters
+defined exactly like a C function. Void functions are acceptable. The body of a
 function is composed of basic blocks. A basic block ends with a
 \textit{terminator} statement which is either a return statement
-(\textit{ret)}) or a branching statement \textit{br}. A basic block will branch
+(\textit{ret}) or a branching statement (\textit{br}). A basic block will branch
 into alternate basic blocks. Eventually the basic blocks converge, possibly to
 a block with a $\varphi$\textit{-function}. Statements in a basic block are
 \textit{instruction} calls. LLVM provides numerous predefined
@@ -194,11 +194,11 @@ represented as a pointer to a word size integer (i64* or i32*). A
 located on the heap. The \textit{position} type constructor takes two integers
 to build itself. Wybemk determines that this needs a total of 16 bytes
 allocated on the heap, 8 for each member (assuming an int is defined as
-\textit{i32} here). In the two clauses shown for the constructor procedure for
+\textit{i64} here). In the two clauses shown for the constructor procedure for
 \textit{position}, clause 0 packs up two integers into a \textit{position} type
 and clause 1 unpacks two integers from a \textit{position} type. The
-\textit{mutate} and \textit{access} procedures pass a constant \textit{int} as
-the offset index.
+\textit{mutate} and \textit{access} procedure calls pass a constant
+\textit{int} as the offset index.
 
 On the side of LLVM, the instructions \textit{getelementptr}, \textit{store},
 \textit{load} are used to index a pointer, store data using that index, and
@@ -241,7 +241,7 @@ assembly.
 
 By default, LLVM only provides heap indexing instructions. The allocation has
 to be implemented by the programmer. An elementary way to do this is to use
-LLVM function calls to C's \textit{stdlib}, for which an object file providing
+LLVM function calls to C \textit{stdlib}, for which an object file providing
 access to this library has to be linked in later. By using calls to
 \textit{malloc} and \textit{free}, we already have a simple memory interface
 set up. These calls return a \textit{void} pointer which can be
@@ -295,8 +295,8 @@ we are building an executable target $foo$ and the dependency chain looks like:
 
 The \textit{module.main} functions ($aaa.main()$, $bbb.main()$...) are
 concatenated in the order: $ccc,ddd,aaa,bbb,foo$. Notice how $ddd.main$ wasn't
-considered twice even though it would appear in the traversal twice. There is
-no need to run the initialisation code for that module twice. This concatenated
+considered twice even though it would appear twice in the traversal. There is
+no need to run the initialisation code for that module again. This concatenated
 body is put into a new temporary object file under the function name
 \textit{main} and added to the linking list so that \textit{ld} can find the
 \textit{main} symbol it needs.
@@ -313,8 +313,8 @@ specified, and Wybemk will search the system library paths for it. The goal is
 to keep the compiler and standard library independent. This is similar to how
 many languages provide their standard library separately from the compiler. Our
 independence also extends to the implementation of primitive types in the
-compiler. The Wybe source file of the standard library can state the size of
-\textit{ints} in bits.
+compiler, since the Wybe source file of the standard library can state the size
+of \textit{ints} in bits.
 
 
 

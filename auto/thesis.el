@@ -26,7 +26,6 @@
     "chapters/build_system"
     "chapters/codegen_llvm"
     "chapters/future_work"
-    "chapters/conclusion"
     "report"
     "rep11"
     "style/unimelb_thesis")

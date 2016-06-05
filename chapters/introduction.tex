@@ -2,36 +2,37 @@
 
 This thesis presents an incremental and work-saving compiler which utilises a
 newly proposed logic programming based intermediate representation, called
-\textbf{LPVM}, in its pipeline. The source language for this compiler is a new
-multi-paradigm language called \textbf{Wybe} (pronounced \textit{Wee-buh}). The
-compiler eventually targets the \textbf{LLVM} framework which allows it to be
-flexible in targeting multiple modern architectures and actually generating
-machine code. Ideas explored in this thesis stem from the motivation of
-achieving efficiency in a compilation process by avoiding any work that has
-been done in an earlier compilation. The term \textit{work-saving} here, means
-that the compiler should be able to recognise scenarios where it can reload
-completed previous work rather than do the same steps again. For any particular
-build it should recompile only those source files which really need to be
-recompiled. Being \textit{incremental} means being able to define a complete
-compilation as a function of smaller individual compilations, and then working
-on only those smaller units which have changed. The units which have not
-changed need not be recompiled. The level of this smaller compilation unit is
-the \textit{granularity} of a compiler. Traditionally, a compiler operates at
-the granularity of a source file. We want to work with something smaller than
-that, without interrupting normal operations of a compiler.
+\textbf{LPVM}, in its pipeline. The source language for this
+compiler is a new multi-paradigm language called \textbf{Wybe} (pronounced
+\textit{Wee-buh}). The compiler eventually targets the \textbf{LLVM} framework
+which allows it to be flexible in targeting multiple modern architectures and
+actually generating machine code. Ideas explored in this thesis stem from the
+motivation of achieving efficiency in a compilation process by avoiding any
+work that has been done in an earlier compilation. The term
+\textit{work-saving} here, means that the compiler should be able to recognise
+scenarios where it can reload completed previous work rather than do the same
+steps again. For any particular build it should recompile only those source
+files which really need to be recompiled. Being \textit{incremental} means
+being able to define a complete compilation as a function of smaller individual
+compilations, and then working on only those smaller units which have
+changed. The units which have not changed need not be recompiled. The level of
+this smaller compilation unit is the \textit{granularity} of a
+compiler. Traditionally, a compiler operates at the granularity of a source
+file. We want to work with something smaller than that, without interrupting
+normal operations of a compiler.
 
 The purpose of the Wybe programming language is to be an easy to learn language
 without sacrificing robust static type systems which is often sought after in a
 real world project. Wybe wants to serve the same domain as languages like
 Python, in being easy to read and reason with, and statically typed languages
-like Java, in being suitable for production. It also brings with it the power
-of declarative languages and efficient compiled code. A work-saving compiler
-for Wybe, which is geared to eliminate redundancy, should further push its
-suitability for projects involving a large number of modules. With LLVM as the
-back-end code generator we can produce more efficient machine code as the
-project moves along to maturity.
+like Java, in being suitable for production systems. It also brings with it the
+power of declarative languages and efficient compiled code. A work-saving
+compiler for Wybe, which is geared to eliminate redundancy, should further push
+its suitability for projects involving a large number of modules. With LLVM as
+the back-end code generator we can produce more efficient machine code as the
+project moves ahead to maturity.
 
-The choice of an intermediate representation to use in the compiler is an
+The choice of an intermediate representation for use in the compiler is an
 important one. It is the data structure which holds an abstract representation
 of the source code semantics, while being machine independent. It undergoes
 multiple optimisation passes which may or may not alter its structure, and will
@@ -44,7 +45,7 @@ code \citep{irnote}. IRs which resemble the source code semantics more closely
 are deemed to be on a higher level than the ones which have a closer
 resemblance (and the restrictions) to some machine code or assembly. An IR will
 strip away information it does not need anymore, or information that it has
-utilised completely, and transform to a flatter lower level form as it moves
+utilised completely, and transform to a flatter, lower level form as it moves
 through a compilation process. In our pipeline we utilise two different forms
 of IR. The \textbf{LPVM IR} form is generated from a source program in Wybe,
 and the \textbf{LLVM IR} form is generated from the final LPVM IR form. All the
@@ -59,14 +60,14 @@ LPVM IR is the implementation of the logic programming based IR form given in
   Program Virtual Machine}, and named in a similar style to \textit{LLVM}. They
 are not really virtual machines, but as an IR, they provide an abstract
 instruction set resembling an abstract machine. While the use of LPVM
-inherently provides plenty of benefits in program analysis and optimisation, we
+inherently provides several benefits in program analysis and optimisation, we
 can also exploit its structure to achieve the incremental features in our
 compiler. LPVM has an incredibly simple IR structure which makes doing program
-analysis and reasoning easier than its counterparts. It also allows the use of
-powerful logic programming analyses. In this thesis though, the focus is more
-on exploring the structural benefits of LPVM in providing incremental features
-in the compiler, rather than its proposed logic programming optimisation
-techniques.
+analysis and reasoning with the LPVM form easier than its counterparts. It also
+allows the use of powerful logic programming analyses. In this thesis though,
+the focus is on exploring the structural benefits of LPVM in providing
+incremental features in the compiler, rather than its proposed logic
+programming optimisation techniques.
 
 The Wybe compiler is called \textbf{Wybemk} (pronounced
 \textit{Wee-buh-mik}). It is a combination of the words \textit{Wybe} and
@@ -74,7 +75,7 @@ The Wybe compiler is called \textbf{Wybemk} (pronounced
 compiler structures passed on from a previous compilation to be compared with
 the current compilation. By identifying parts which can be re-used in the
 current compilation process we can skip a lot of passes. To facilitate this
-forwarding of information we make use of the byte structure of a object
+forwarding of information we make use of the byte structure of an object
 file. Since building relocatable object files is the natural end goal of any
 compiler, we don't have to develop new Wybemk specific container
 formats. Hence, we explore ways of embedding information into architecture
@@ -88,9 +89,9 @@ simplifications. To behave like Make, we recognise object files which are newer
 than the corresponding source file and avoid re-building that object file. But
 we also don't want to depend on external Makefiles and interface/header
 files. Wybemk is intelligent enough to determine the transitive closure of
-dependencies to build for any give source. The goal here is to provide a
-complete solution for a build system so that there is no need to rely upon
-third party tools and build systems later when the language matures.
+dependencies to build for any give source or target. The goal here is to
+provide a complete solution for a build system so that there is no need to rely
+upon third party tools and build systems later when the language matures.
 
 
 The rest of the thesis presents a more in-depth discussion of the points made
@@ -106,7 +107,10 @@ the compiler, and in Chapter~\ref{chap:wybe_to_lpvm} we discuss the
 transformation of Wybe to LPVM. This is the first stage of the compiler. We are
 then set to present the incremental and work saving build system, Wybemk, in
 Chapter~\ref{chap:build_system}. Finally we discuss code generation from LPVM
-to LLVM in Chapter~\ref{chap:codegen_llvm}. The thesis is tangential to a
+to LLVM in Chapter~\ref{chap:codegen_llvm}. Chapter~\ref{chap:future_work}
+presents the future direction of Wybemk and concludes.
+
+The thesis is tangential to a
 working implementation of the Wybemk compiler, which is written entirely in
 Haskell.
 

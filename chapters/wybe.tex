@@ -135,6 +135,11 @@ public proc factorial(n:int) use !io
 end
 \end{Verbatim}
 
+    \begin{Verbatim}[frame=single,label=User Types,labelposition=topline,framesep=4mm,fontsize=\small,commandchars=\\\{\}]
+public type position = public position(x:int, y:int) end
+
+\end{Verbatim}
+  
   
   \caption{Sample Wybe programs}
   \label{fig:wybe_programs}
@@ -181,9 +186,10 @@ defined.
 
 
 
-
 On the imperative side, Wybe does have loops. Figure~\ref{fig:wybe_programs}
-shows a few examples of Wybe programs to introduce the general syntax.
+shows a few examples of Wybe programs to introduce the general syntax. The
+procedure form of the factorial operation reveals that it will be doing IO in
+its body using the \textit{use !io} syntax. 
 
 
 %%% Local Variables:

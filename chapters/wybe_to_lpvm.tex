@@ -45,7 +45,7 @@ structure. In this process it undergoes \textit{flattening}, \textit{type
   checking}, \textit{un-branching}, and a final \textit{clause generation} to
 obtain a structure similar to Figure~\ref{fig:lpvm_data_type}. Once the LPVM
 structure is obtained, we can run more optimisation passes over it. One such
-optimisation on a complete LPVM form is the \textit{Expansion} pass. This pass
+optimisation on a complete LPVM form is the \textit{expansion} pass. This pass
 explores costs and benefits of in-lining procedure bodies for calls, marking
 calls which should be in-lined. In-lining at the LPVM level provides a lot of
 benefits which are apparent in the incremental features of the compiler
@@ -69,8 +69,8 @@ dependencies) given a module name. The implementation for any given module name
 can be obtained easily as long as it exists in the above list. The module
 currently under compilation will be at the head of this list. This also makes
 loading implementations from an external source and removing module
-implementations from the pipeline very easy, assisting the incremental features
-discussed in Chapter~\ref{chap:build_system}.
+implementations from the pipeline very easy, assisting in the implementation of
+the incremental features discussed in Chapter~\ref{chap:build_system}.
 
 Since LPVM procedure signatures should also present a pure interface like Wybe,
 Wybe \textit{resources} are passed as a new extra parameter to the
@@ -102,20 +102,19 @@ are put into a separate nameless procedure. The code generation phase will
 later make this the \textit{main} function of the module.
 
 Since LPVM primitives are in the form of procedure calls, all normalised Wybe
-statements are gradually reduced to procedure calls since primitives in LPVM
-are just procedure calls. These primitive procedure calls can be \textit{local}
-calls to other procedures in the module or imported Wybe modules (fully
-qualified procedure names), or they can be \textit{foreign} calls. Foreign
-calls reference procedures or instructions which have to be addressed later by
-the code generation phase. This is usually done by linking in an external
-object file or using LLVM instructions. For example, the Wybe standard library
-defines a procedure \textit{println} whose body statements are foreign calls to
-C's \textit{printf}. A shared C library will be linked with the standard
-library to resolve these calls to access system IO. To Wybe and LPVM the only
-difference between a local and a foreign procedure call is that the local calls
-can be in-lined since their definitions will have a LPVM form in another wybe
-module. Otherwise it is just another \textit{Prim} (primitive) in a LPVM clause
-body.
+statements are gradually reduced to procedure calls. These primitive procedure
+calls can be \textit{local} calls to other procedures in the module or imported
+Wybe modules (fully qualified procedure names), or they can be \textit{foreign}
+calls. Foreign calls reference procedures or instructions which have to be
+addressed later by the code generation phase. This is usually done by linking
+in an external object file or using LLVM instructions. For example, the Wybe
+standard library defines a procedure \textit{println} whose body statements are
+foreign calls to C \textit{stdio} \textit{printf}. A shared C library will be
+linked with the standard library to resolve these calls to access system IO. To
+Wybe, and LPVM, the only difference between a local and a foreign procedure
+call is that the local calls can be in-lined since their definitions will have
+a LPVM form in another Wybe module. Otherwise it is just another \textit{Prim}
+(primitive) in a LPVM clause body.
 
 The result of the flattening pass is a very normalised structure of only
 procedures. Apart from the above conversions, the normalisation which happens
@@ -132,7 +131,9 @@ assignment and comparison here. They are differently evaluated depending on the
 modes and number of parameters. here A user introduced type constructor is
 normalised to a new procedure. For example, the \textit{ADT} definition for
 \textit{bool} has two constructors, \textit{true} and \textit{false}, which
-create the following procedures:
+create the procedures shown in Figure~\ref{fig:proc_types}.
+
+\begin{figure}
 \begin{align*}
   type\ bool\ = public\ false\ \vert true
   \quad \rightarrow & \quad
@@ -146,6 +147,10 @@ create the following procedures:
                     & \quad
                       \mathbf{=}(x:bool, y:bool, ?z:bool) \\
 \end{align*}
+\caption{Normalisation: generation of procedures to provide an interface to a
+  user type}
+\label{fig:proc_types}
+\end{figure}
 
 Normalisation in a compiler ensures that we will be operating with a well
 defined and closed set of primitives hereafter. Addition of new syntax features
@@ -154,7 +159,7 @@ primitives. This greatly simplifies compiler construction.
 
 \subsection{Type Checking Pass}
 
-Wybe, and LPVM, is statically typed. The type checking pass is essential to
+Wybe, and LPVM, are statically typed. The type checking pass is essential to
 enforce this strictness and robustness of the type system. It also connects
 polymorphic procedure calls to the correct procedures by matching call
 signatures with procedure prototypes. Explicit typing is also only enforced on
@@ -165,9 +170,8 @@ Every variable name in the AST will be annotated with an inferred type at the
 end of this pass. As mentioned above, every type in Wybe is defined in its own
 module which contains all the procedures used to interact with that
 type. Hence, this pass also connects type names to the modules that provide the
-definition for that type. This is even required for standard types like
-\textit{int} since can be provided by a non standard library just as
-easily.
+definition for that type. This is required even for standard types like
+\textit{int} since it can be provided by a non standard library just as easily.
 
 Polymorphic calls are resolved by looking into imported modules in reverse for
 a matching procedure prototype. Since every module auto imports the
@@ -175,8 +179,8 @@ a matching procedure prototype. Since every module auto imports the
 module list for any particular module. For example, the equality procedure
 \textit{'='}, can be defined in a type module for \textit{int} and the type
 module for \textit{string}. The type checker will choose one depending on the
-context. A statement comparing two \textit{int} (inferred) variables the call
-\textit{proc call =(a, b, ?c)}, will be annotated as \textit{proc call
+context. A statement comparing two \textit{int} (inferred) variables, like the
+call \textit{proc call =(a, b, ?c)}, will be annotated as \textit{proc call
   wybe.int.=(a:wybe.int, b:wybe.int, ?c:wybe.int)}.
 
 At the end of a successful type checking pass, every flattened procedure call
@@ -189,8 +193,8 @@ that defines it.
 The un-branching pass is where all conditional branches and loops are replaced
 with procedure calls and recursion respectively. This is the structure defined
 by LPVM. At this stage, a flattened Wybe procedure may create one or more
-generated procedures to act as branching blocks, as described in the chapter on
-LPVM. 
+generated procedures to act as branching blocks, as described in
+Chapter~\ref{chap:lpvm}.
 
 
 \subsection{Clause Generation Pass}
@@ -201,7 +205,7 @@ implementations for all the flattened clauses of the procedures will have the
 constructor \textit{ProcDefPrim} applied, with the LPVM prototype and body
 primitives put in its place. Procedure calls reflect the clause they are trying
 to actually call with a suffixed index. For example a call to \textit{foo<2>}
-is referencing its third clause in order. 
+is referencing its third clause in order (starting from 0). 
 
 After this pass an entire module is just a list of clauses. This representation
 will be passed through further optimisation passes and finally LLVM code
@@ -236,11 +240,12 @@ In-lining is supported by having LPVM forms of all modules involved in
 compilation in the compiler pipeline, and will be reflected in the incremental
 features later. 
 
-As an example, most of Wybe standard library types like \textit{int}
-,\textit{bool}, \textit{float}, have simple primitive procedures for binary
+As an example, most of Wybe standard library types like \textit{int},
+\textit{bool}, \textit{float}, have simple primitive procedures for binary
 operations. The implementation bodies for these procedures are just a single
 foreign instruction call to LLVM instructions. These will definitely be
-in-lined and in code generation phase will turn into a single LLVM instruction.
+in-lined and in code generation phase will turn the body into a single LLVM
+instruction.
 
 
 
