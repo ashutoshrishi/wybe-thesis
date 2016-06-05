@@ -1,0 +1,44 @@
+\chapter{Future Work}
+\label{chap:future_work}
+
+% Wybe
+The Wybe programming language still has a lot of syntax changes and new
+features coming along in its future pipeline. It's a new language and complete
+syntax re-works are common. The changes to Wybe syntax naturally changes a lot
+of existing LPVM structures, which in turn have to be dealt with in LLVM code
+generation. Work on adding more LPVM analyses and optimisation passes is also
+underway. We also want to add a more complete static garbage collection option
+to Wybe and extend the typing implementation to be more space effecient. All
+modern languages feature memory robustness and safety, and Wybe will have to
+compete with them
+
+The build system of the Wybemk compiler is consistently being made more
+incremental. Some of the unimplemented possibilities have been discussed in
+Chapter~\ref{chap:build_system}. The hash function used for comparing
+\textit{checksums} can also be chosen more intelligently.
+
+Along with newer approaches to be more time-saving, we also want to extend our
+compiler to be more cross platform. We have shown how we embed information into
+\macho object files for OS X only. Using the cross platform LLVM
+\textit{bitcode} files is still an option. Currently Wybemk can build an object
+archive target for a folder of Wybe source files. This is the first step
+towards packages in the build system. However we do not embed any information
+into the archive files yet. Our use of normal object files makes it possible to
+link Wybe with object files built by other compilers. Since Wybemk is supposed
+to be a complete solution for compiling and building, it should be intelligent
+enough to know which system libraries to link in for any use-case. For example,
+Wybe should be able to explicitly say that it wants to be linked with some C
+GUI library on the system.
+
+While we want to exploit the new logic IR, LPVM, as much as possible and use
+LLVM for code generation, we don't want to duplicate LLVM optimisation
+methods. The LLVM back-end framework provides numerous optimisation passes for
+which a lot of work has already been put it.  We don't want to shy away from
+these. Testing the effects and incorporating more advanced LLVM optimisation in
+tandem with LPVM passes are planned for future work.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:

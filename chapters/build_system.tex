@@ -1,38 +1,42 @@
 \chapter{Wybemk, Compiler and Build System}
 \label{chap:build_system}
 
-\textbf{Wybemk} is the incremental compiler and a Make utility combined
-together in one executable for Wybe source code. It is modelled after the GNU
-Make utility \citep{make}, but doesn't need an explicit \textit{Makefile} to
-make Wybe source files. The Wybemk compiler just needs the name of a target to
-build, and it will infer the building and linking order. Targets include
-architecture dependant relocatable object files, LLVM bitcode files, or a final
-linked executable. The object files and bitcode files that Wybemk builds are a
-little different than what other utilities create. They have embedded
-information that assists a future compilation processes in being
-incremental. It is this embedding that allows Wybemk to be an incremental and
+\textbf{Wybemk} is the incremental compiler for Wybe source code and a
+Make-like build system combined together in one executable. It doesn't depend
+on a Makefile or header/interface files to compute dependency graphs. Wybemk
+compiler just needs the name of a target to build, and it will infer the
+building and linking order. Targets include architecture dependant relocatable
+object files, LLVM \textit{bitcod}e files, or a final linked executable. The
+object files and \textit{bitcode} files that Wybemk builds are a little
+different than what other utilities create, but still recognised as an ordinary
+object file. They have embedded information that assists a future compilation
+process. It is this embedding that allows Wybemk to be an incremental and
 work-saving compiler.
 
-By not building a target object file when the source is older, the LPVM form
-and analysis for that module is also skipped. This is acceptable for only
-intra-module optimisations, since the final optimised object code will be the
-same. But we might be missing a lot of inter module optimisation opportunities
-and LPVM inlining that other dependant modules can reap benefits from. Object
-files store a symbol table which will list all the callable function names in
+Like Make, if an object file for a corresponding source module is found to be
+newer in its modification date-time, the object file is not re-built. But by
+not re-building a target object file, the LPVM form and analysis for that
+module is also skipped. This is acceptable for only intra-module optimisation
+phases since the final optimised object code will be the same. But we might be
+missing a lot of inter module optimisation opportunities and LPVM in-lining
+that other dependant modules can reap benefits from. Object files normally
+store a symbol table which will list all the callable function names in
 it. This is what the \textit{linker} uses to resolve extern calls during
 linking. The body of these functions are stored in object code form. We can't
-make a decision on inlining these functions into another module from this. It
+make a decision on in-lining these functions into another module from this. It
 would be beneficial to have the LPVM form of all the modules participating in a
-compilation process for these optimisation decisions. We want to store LPVM
-analysis information in the object files so that when they are not going to be
-re-compiled, we can at least pull in the LPVM form of that module in the
+compilation process for this decision. Thus, we want to store LPVM analysis
+information in the object files so that when they are not going to be
+re-compiled, we can at least pull in the LPVM form of that module into the
 compilation pipeline.
 
-The limited structure of LPVM makes serialising and embedding its byte
-structure into a object file byte string easy and feasibile. We could have also
-stored the parse tree, but a parse tree has a wider form and is redundant with
-the source code. With storing the parse tree we are only skipping the work the
-parser does and would have to redo all the LPVM transformation and
+The fairly limited structure of LPVM makes serialising and embedding the
+resulting byte structure into a object file practically feasible. If we were
+spending more time serialising and doing this IO operation, it would not be an
+acceptable trade off. Instead of the LPVM form, we could have also stored the
+parse tree. But a parse tree has a wider form and is redundant with the source
+code file. With storing the parse tree we are only skipping the work the parser
+does and would still have to redo all the LPVM transformation and
 analysis. This would be more work. The simple yet highly informational form of
 LPVM makes it an ideal structure to pass around.
 
@@ -40,230 +44,351 @@ LPVM makes it an ideal structure to pass around.
 Why object files though? An object files' structure is architecture dependent
 and requires different efforts for storing and loading information for each
 architecture. This would put a constraint on the number of architectures that
-Wybemk can operate on even though with LLVM it should be able to possibly
-generate code for those architectures. However object files are a common
+Wybemk can operate on, even though with LLVM it should be able to possibly
+generate code for those architectures. However, object files are a common
 container for relocatable machine code. Most compilers traditionally build a
 object file for the linker to link. Currently Wybemk does not want to reinvent
 that format and we would like our incremental features to work in tandem with
-the common choices. Apart from object files however, the Wybemk compiler can do
-the same embedding with LLVM bitcode files. LLVM bitcode files can be treated
-as architecture neutral, and since we use a LLVM compiler as a final stage, we
-can use bitcode files as a replacement for architecture dependent object files.
+the common choices. Apart from object files, the Wybemk compiler can do the
+same embedding with LLVM bitcode files. LLVM bitcode files can be treated as
+architecture neutral. Since we use a LLVM compiler as a final stage, we can use
+bitcode files as a replacement for architecture dependent object files.
 
+
+In Section~\ref{sec:storage_obj} we discuss our method of embedding a byte
+string in an object file and bitcode file. After which, we discuss how storing
+different types of data exposes different approaches to being incremental and
+work-saving in Section~\ref{sec:incremental_compilation}.
 
 \section{Storing structures in Object files}
+\label{sec:storage_obj}
 
 Object files store relocatable object code which is the compiled code generated
-by the LLVM compiler in the wybe compiler. Even though different architectures
-have their own specification of the object file format, they are modelled
-around the same basic structure. Object files defines segments, which are
-mapped as memory segments during linking and loading. A special segment called
-\textit{TEXT} usually contains the instructions. An object file also lists the
-symbols defined in it, which is useful for the linker to resolve external
-function calls from another module being linked. Avoiding all the common
-segment names, it is possible to add new segments to the object file (at the
-correct byte offset), which do not get mapped to memory. These are zero address
-segments. Using such such segment we can attempt storage of some useful
-serialised meta-data in the object file. 
+by the final LLVM compiler in the Wybemk compilation pipeline. Even though
+different architectures have their own specification of an object file format,
+they are modelled around the same basic structure. An object files defines
+segments, which are mapped as memory segments during \textit{loading}. A
+special segment called \textit{TEXT} usually contains the instructions. An
+object file also lists the symbols defined in it, which is useful for the
+linker to resolve external function calls from another module being
+linked. Avoiding all the common segment names, it is possible to add new
+segments to the object file (at the correct byte offset in the file), which do
+not get mapped to memory. These are zero address segments. Using such a segment
+we can attempt storage of some useful serialised meta-data in the object file
+without bloating the linked executable.
 
 Our current implementation has the functionality to parse and embed information
 in \macho object files and \textit{bitcode} files. The \macho file format is
 the Application Binary Interface (ABI) format that the OS X operating system
-uses for its object files. An ABI describes the byte ordering and their meaning
-for the operating system in this case. The embedded bytes do not interfere in
-any semantics of the object file. It still appears as an ordinary object file
-to every other machine utility or parser, like the tools \textit{ld}, and
-\textit{nm}. The only aspect which noticeably changes is it's total byte size.
-
+uses for its object files. In this case, an ABI describes the byte ordering and
+their meaning for the operating system. The extra embedded bytes should not
+interfere in the usual semantics of the object file. The object file should
+still appears as an ordinary object file to every other machine utility or
+parser, like the tools \textit{ld}, and \textit{nm}. The only aspect which
+noticeably changes is its total byte size.
 
 \subsection{Mach-O Object File Format}
 
-Quite simply, an object file is a long byte string sequence. Referring to the
-Apple documentation\footnotemark on their format, we are able to parse and
-edit the \macho byte structure. The first 32 bits or 4 bytes are considered to
-be the magic number if read in little endian format. The magic number constant
-determines what kind of ABI the rest of the bytes of the file follow and their
-ordering. On OS X we can have 32 bit and 64 bit \macho object files and
-Universal binaries. Universal binaries or Fat archives contain more than one
-object file. Wybemk is interested in \macho object files.
+Quite simply, an object file is a long sequential byte string sequence. Every
+byte is semantically important. Referring to the Apple
+documentation\footnotemark on their format, we are able to parse and edit the
+\macho byte structure. The first 32 bits or 4 bytes are considered to be the
+\textit{magic number}, if read in the \textit{little endian} format. The magic
+number constant determines what kind of ABI the rest of the bytes of the file
+follow and their \textit{endianness}. On OS X we can have 32 bit and 64 bit
+\macho object files, and Universal binaries. Universal binaries or Fat archives
+contain more than one object file. Wybemk is mostly interested in \macho object
+files.
 
 
-The header bytes of the identified structure will give the number of load
-commands the file contains. The load commands are the segments which get loaded
-to the main memory during execution. The load commands provide the name of
-their segment and a pointer to offset of their data. Each segment can also
-contain multiple sections. Wybemk creates a new segment called
+The header bytes of the identified structure will give the number of
+\textit{load commands} in the file. The \textit{load commands} are the segments
+which get loaded to the main memory during execution. The bytes of a
+\textit{load command} will provide the name of its segment and an offset
+pointer to the location of its data in the file. Each segment can also contain
+multiple sections. A complete object file has several important pre-defined
+segments and sections which should not be touched by us to prevent altering the
+original object file. Wybemk creates a completely new segment called
 \textit{\textunderscore \textunderscore LPVM} and a section in it called
 \textit{\textunderscore \textunderscore lpvm}, following naming
-conventions. Once the offsets are correctly determined and bytes describing the
-load command put in its right place, we can insert any length byte-string at
-our offset. This byte-string will be the encoded serialised form of our
-embedded data.
+conventions. This adds a new load command and increments the number of load
+commands the object file has. Once the offsets are correctly determined and
+bytes describing our new load command put in its right place, we can insert our
+byte-string at that offset. We will have to alter the offsets of the subsequent
+load commands. To make it easier, we rather have our new load command data at
+the end of the object file. This byte-string will be the encoded serialised
+form of the data type we want to embed.
 
 While we have only covered the \macho object files in our embedding
 implementation, it is also possible to use the system \textit{ld} linking,
-found on most \textit{UNIX} OS, to add new segments and sections. Other object
-file formats, like the \textit{Elf} format for Linux, can be used for embedding
-this way. This is part of our future planned work.
+found on most \textit{UNIX} machines, to add new segments and sections. Other
+object file formats, like the \textit{Elf} format for Linux, can be used for
+embedding this way. This is part of our future planned work.
 
 \footnotetext{ Documentation \url{https://developer.apple.com/library/mac/documentation/DeveloperTools/Conceptual/MachORuntime/}}
 
 \subsection{Bitcode Wrapper}
 
-LLVM IR can be put in \textit{bitcode} files\footnotemark. These are binary
-representations of the LLVM IR it encodes. These files are identified by a
-magic number, similar to a \macho file. LLVM tools can easily generate these
-formats and even compile them to object file and link them. In a way they are a
-machine architecture independent version of object files and can be easily
-distributed between compilers which support LLVM. It provides great
-interoperability. Hence we want to have the option to utilise them in a similar
-fashion to how we utilise object files.
+LLVM IR can be put in \textit{bitcode} files\footnotemark using LLVM
+tools. These are binary representations of the LLVM IR. These files are
+identified by a magic number, similar to a \macho file. Other LLVM tools can
+easily generate these formats and even compile them to an object file and link
+them. In a way, they are a machine architecture independent version of object
+files and can be easily distributed between compilers which support LLVM. It
+provides great \textit{interoperability}. Hence, we want to have the option to
+utilise them in a similar fashion to how we utilise object files.
 
-A \textit{bitcode} wrapper differs from an ordinary \textit{bitcode} file in
-its initial magic number. This wrapper format specifies a header which should
-give the byte offset of the byte string representation of the LLVM IR it
+A \textit{bitcode} wrapper file differs from an ordinary \textit{bitcode} file
+in its initial magic number. This wrapper format specifies header bytes which
+should give the offset of the byte string representation of the LLVM IR it
 holds. The rest of the bytes after the header and before the offset are
-therefore free to embed information. We use this space to store our LPVM
-information which usually goes into the object file.
+therefore free to embed information. We use this space to store the LPVM
+information which usually goes into the object file, in a serialised form.
 
 
 \footnotetext{ See \url{http://llvm.org/docs/BitCodeFormat.html}}
 
 
 \section{Incremental Compilation}
+\label{sec:incremental_compilation}
 
-Wybe, as a programming language, wants to be useful for large scale
-projects. Thus, it wants its compilation process to be as effecient as
-possible. In larger projects, a large number of modules are involved in a
-single build. Doing incremental builds would involve smaller changes being
-added for every fresh build. Having all the modules compile again is a waste of
-time. 
+Wybe, as a new programming language, has a goal to be useful for large scale
+projects. Thus, Wybemk should be as efficient as possible in its compilation
+process. In bigger projects, a large number of modules are involved in a single
+build. Having a heuristic to selectively compile and yet obtain the same
+working build as a full compile massively reduces turn around time over a
+period \citep{cost_of_recompilation}. Having all the modules compile again is a
+waste of time.
 
-The goal is to make Wybemk incremental at multiple levels. This can be done by
-identifying key stages of a compilation process which can act as save and
-restore points. The saving is done in object files (or bitcode files) as shown
-above. The decision to restore has to be a careful one, as a false positive
-would result in a completely wrong build. There should be no margin for these
-kinds of errors to exist if this compiler is to be used in production
-builds. There is also a requirement of being incremental without losing the
-benefits of LPVM optimisations. With these constraints, currently Wybemk has
-two incremental and work saving approaches: Module level reloading, and storing
-hashes of key compilation stages.
+Another method to achieve efficiency in building is to be incremental. If the
+compiler can operate at a granularity lower than the entire source file, it can
+save and reload object code of smaller units of the source file
+\citep{cpp_compiler}. In Wybemk we can operate at the granularity of LPVM
+procedures. Since Wybe functions and procedures all get compiled to a LPVM
+procedure form, we can re-use LPVM forms of Wybe structures we have seen
+before. To do this, we identify certain key stages in the compilation pipeline
+which can act as save and restore checkpoints. The saving is done using object
+file (or bitcode file) embedding, as shown above. The decision to restore has
+to be a careful one, as a false positive would result in a completely wrong
+build. There should be no margin for these kinds of errors to exist if the
+compiler is to be used in production builds. There is also a requirement of
+being incremental without losing the benefits of LPVM optimisations. With these
+constraints, currently Wybemk has two incremental and work saving approaches:
+Module level reloading, and storing hashes of key compilation stages.
 
 
 \subsection{Module level reloading}
+\label{sssec:moduel_reloading}
 
-Wybemk compiler behaves like GNU Make but it does not depend on Makefiles. It
-infers the module dependancy graph and builds everything accordingly. It should
-also link in standard libraries and external foreign libraries wherever
-needed. Inferring the dependancy graph is done through parsing the top level
-\textit{use module} statements. During compilation LPVM representation of each
-module in the graph is built. For modules who have a newer object file, this
-representation will be stored in a serialised form and has to be
-\textit{reloaded} into the pipeline. This keeps the optimisations going and
-allows other modules to inline functions or procedures from that module.
+Wybemk compiler behaves like GNU Make but it does not depend on Makefiles or
+separate interface/header files for modules. For a given target, it is able to
+determine the transitive closure of its dependencies. Inferring the dependency
+graph is done through parsing the top level \textit{use module} statements and
+sub-module declarations. There is a restriction here that modules and their
+corresponding object files are matched by name and location only. So for a
+module, Wybemk wants to find its object file (if it is built) in its search
+path.
 
-For example the \textit{int} module in the Wybe standard library module
-(Figure~\ref{fig:wybe_int}) mostly has one line procedures and functions
-(simple arithmetic operators pointing to LLVM instructions). That is, their
-body is a single procedure call. Instances of calls to \textit{proc +} can be
-replaced with the body proc call instead. And this is what actually happens
-when the standard library object file is \textit{loaded} by the Wybemk
-compiler. Inlining at LPVM level provides these small but essential benefits.
+The Wybemk compilation pipeline is composable. For a given list of source
+modules, it will build up the LPVM form for only those modules which don't have
+an LPVM form in the pipeline. So a LPVM form can come from anywhere. This LPVM
+form is a part of what we embed in an object file on a successful build. During
+compilation, modules which have a newer object file do not undergo
+re-compilation. However, the LPVM form stored in the byte string embedded in
+that object file is deserialised and placed in the pipeline. The compilation
+will continue transparently.
 
-We want to embed only the minimum set of data we will need for the next
-compilation. The serialised abstract data type in the implementation is the
-subset of the type which holds information on the whole \textit{Module}. The
-complete \textit{Module} type holds information on the exported types,
-procedure implementations, sub-module names, dependency information, LLVM
-implementation, among others. The serialised subset will remove local
-information and just preserve the interface of the \textit{Module}. For
-example, the LLVM implementation is already present in essence in the
-\textit{TEXT} segment of the object file in object code form.
+As mentioned above, one of the derived utilities of having the LPVM form for
+every module at hand is in-lining. LPVM level in-lining is also discussed in
+Chapter~\ref{chap:wybe_to_lpvm}. For example the \textit{int} module in the
+Wybe standard library module (Figure~\ref{fig:wybe_int}) mostly has one line
+procedures and functions (simple arithmetic operators pointing to LLVM
+instructions). That is, their body is a single procedure call. Instances of
+calls to \textit{proc +} can be replaced with the body proc call instead. And
+this is what actually happens when the standard library object file is
+\textit{loaded} by the Wybemk compiler. The standard library is only compiled
+once in it's entire lifetime. In-lining at LPVM level provides these small but
+noticeable benefits.
+
+We want to embed the minimum set of data we will need for the next
+compilation. In our implementation we are going to be serialising an
+\textit{Abstract Data Type}. This ADT is the subset of the type which holds
+information on an entire \textit{Module}. The complete \textit{Module} type
+describes the exported types, procedure implementations, sub-module names,
+dependency information, LLVM implementation, and more, for a module. The
+serialised subset will remove local information and just preserve the fields
+which other modules might need to read. For example, the LLVM implementation is
+already present, in essence, in the \textit{TEXT} segment of the object file in
+object code form. If a source module contains multiple sub-modules, the
+serialisation is done on a list of \textit{Modules} instead in a fixed order.
 
 Not every procedure defined in the module has to have its LPVM form passed
 along in the serialised \textit{Module}. Private procedures cannot be in-lined
 by any other module and hence will never be utilised in an inter-module
 optimisation. Serialising the LPVM form instead of the source code form already
-saves a lot of space, having extra space saving heuristics is a bonus. The
-exportable \textit{Module} subset is serialised as a byte string. A LPVM
-primitive is made up of either of two constructors
-(Figure~\ref{fig:lpvm_data_type}): \textit{PrimCall} or
-\textit{PrimForeign}. This keeps the tag byte size small for serialising a
-procedure body. Even the procedure LPVM implementation is made up of only one
-constructor: \textit{ProcDefPrim}. The tag byte contains flag type information
-to identify which constructor to use while decoding.
+saves a lot of space, so extra space saving heuristics are a bonus. The
+exportable \textit{Module} subset is packed as a byte string. A LPVM primitive
+is made up of either of two constructors (Figure~\ref{fig:lpvm_data_type}):
+\textit{PrimCall} or \textit{PrimForeign}. This keeps the tag byte size small
+for serialising a procedure body. Even the procedure LPVM implementation is
+made up of only one constructor: \textit{ProcDefPrim}. The tag byte contains
+flag type information to identify which constructor should be used while
+decoding.
+
+Reloading of the entire LPVM module is done when the object file has a newer
+modification time. This is an assurance that the LPVM form reloaded is
+representative of the correct source code. This also means the entire source
+module or a build of several modules should successfully compile at least
+once. After which, we get time savings on changes to individual modules in
+subsequent builds. This is how Wybemk implements its work-saving features. The
+next stage, being incremental, is designed to work when the object file can be
+older than the source. This is discussed in the next subsection.
 
 
 
-\subsection{Incrementality through Hashing}
+\subsection{Incrementality through Storing Hashes of Stages}
+\label{sssec:incrementality}
 
-Certain stages in the compilation pipeline can act as checkpoints where Wybemk
-checks if it is going to do the same work as the last compilation. These
-checkpoints have to be chosen carefully as having numerous checkpoints will
-start slowing down the compiler instead of saving time. Certain stages behave
-as natural checkpoints, like the end of the parsing and the end of
-transformation to LPVM. For determining if Wybemk has reached the same stage as
-before, it hashes the serialised form of the current representation at hand,
-and compares it with the hash stored in the object file. Hence, along with the
-serialised LPVM representation of module, Wybemk object file also embeds
-certain hash strings in a serialised map data structure.
+Given a newer source file and it's last built object file we want to build a
+new object file which contains parts from the old object file which was not
+affected by the source code changes. In this scenario, simply loading the
+entire LPVM form from the object (shown above) is not correct. Certain stages
+in the compilation pipeline can act as checkpoints where Wybemk checks if it is
+going to do the same work as the last compilation. These checkpoints have to be
+chosen conservatively as having numerous checkpoints will start slowing down
+the compiler instead of saving time. Reloading of old work should also be done
+carefully as dependencies in the current compilation process might not be the
+same as last time.
 
-The constraints under which our system is to operate is similar to the ones
-mentioned in \cite{cpp_compiler} for their C++ incremental compiler system. We
-choose our granularity in such a way that we can automatically generate
-dependencies for it. We have to absolutely sure we are not executing old code
-and that we are choosing the right old versions. Their system uses time
-stamping as a heuristic to choose between compiling or not, while we are using
-hash comparisons to choose between compiling or loading.
+The level of granularity we work at must be able to generate complete
+transitive closures of dependencies \citep{cpp_compiler}. The Wybe top-level
+contains only functions and procedures (top level statements are placed in
+another procedure of their own). Both these functions and procedures are
+flattened to look like procedures, as discussed in
+Chapter~\ref{chap:wybe_to_lpvm}. The \textit{ProcDef} type in the compiler
+(Figure~\ref{fig:proc_impln}) contains information on the callers of a
+procedure, and the procedures which in-line it. This information can help us
+compute the dependent set of procedures for any given procedure. Procedures
+belonging to that dependent set will be affected by a change in the root
+procedure. It should be noted that the dependent set is local to the module. It
+is not possible to determine affected procedures across module boundaries. A
+changed procedure will mark itself changed. Procedures from other modules can
+check this mark to determine their own condition. The dependency graph of
+modules is compiled depth first so an external procedure from another module
+would already have a compiled form.
 
-These methods are meant to kick in for scenarios where the source file has more
-edits (or is newer) than the object file. In these cases simply loading the
-whole LPVM module is not correct. But identifying unchanged parts and loading
-those parts while re-doing the other parts provide a faster compilation
-time. In our current iteration of the compiler we are applying hash comparisons
-at two stages: after parsing, and just before the LPVM optimisation passes.
+We can define the Wybemk compilation pipeline as being a transformation from
+Wybe source code to LPVM, and then a transformation from LPVM to object
+code. Let's assume that LLVM IR and object code generation are part of a single
+atomic step. During the first transformation, from Wybe to LPVM, we first
+arrive at an elementary form of LPVM and then run optimisation passes on it
+until we arrive at a final LPVM form. A Wybe procedure is transformed to one or
+more LPVM procedures as shown in Chapter~\ref{chap:wybe_to_lpvm}. The final
+LPVM form for each procedure already exists in the object file. If we have the
+relation between a Wybe procedure name and the names of the LPVM procedures it
+is transformed to, we can load the LPVM procedure forms from the object file
+without doing the transformation and optimisation passes. Note that this would
+require the LPVM forms of even private procedures to exist in the object
+file. We have to revoke the decision we made earlier to store only public
+procedures since they are the ones which get inlined.
 
-After parsing we can store the hash of the parse tree generated by the
-parser. When the parser finishes its work, Wybemk can hash its AST and compare
-it with the hash of the previous AST. For source code edits involving changing
-or adding comments and white-space, the parse tree doesn't change even though
+To determine whether we should re-load the LPVM form of a Wybe procedure or do
+the transformation we us hash comparisons. At a checkpoint, we run a hash
+function on the current form at hand and compare it with the hash stored in the
+object file (for the same stage). The hash stored in the object file is from
+the last time that form was actually compiled. These hashes are stored in a
+\textit{Map} in the subset of the \textit{Module} type that gets serialised and
+embedded in the object file (shown above). The hash function we are using is
+the old popular checksum algorithm \textit{md5}. We are ignoring collisions and
+speed for now to reach a working implementation first. There is definitely
+future work involved in choosing the correct algorithm
+
+
+An early and elementary stage of compilation at which we can use hash
+comparisons is the post-parsing stage. After parsing we can compute the hash of
+the \textit{Abstract Syntax Tree} type generated by the parser. The hash of the
+previous AST (from a previous compilation) is loaded from the object file. By
+comparing these two hashes we make a decision on whether to proceed with
+recompilation or not. For source code edits involving changing or adding
+comments and white-space, the complete parse tree doesn't change even though
 the source file will now have a newer modification time. These trivial yet
 extremely common edits should not run the whole compilation process. In this
-case we just load the final LPVM form from the object file. A future extension
-to this check is considering procedure, functions, and other top level items
-without order, so that that they all are individually checked and changing
-their order in the file changes nothing.
+case we just load the final LPVM form from the object file, just like the case
+when the object file was newer. A future extension to this check is considering
+procedure, functions, and other top level items without order, so that that
+they all are individually checked and changing their order in the file changes
+nothing.
 
-% Change this part it's rubbish
-Completely change this last part.
+After the parse tree check, we can begin considering Wybe procedures
+individually. We still wait until the flattening stage so that we are dealing
+with a single normalised procedure form. The hash function operates on the
+\textit{ProcDefSrc} type. In the object file we store the hash of the same form
+from a last complete compilation. As mentioned above, for every procedure $P_i$
+we also have a set of procedures which are dependent on the current interface
+of $P_i$. If a procedure has changed, it will be re-compiled until LPVM. This
+will also trigger a recompilation for the procedures in the dependent set. It
+can be observed that there can be a set of procedures which have not changed
+and aren't in the dependent set of a changed procedure. It is safe to reload
+the LPVM form for these procedures from the object file into the compilation
+pipeline. Not recompiling this set is the first elementary gain we are
+accomplishing.
 
-The choice of granularity for the Wybemk compiler is a Wybe procedure or
-function. As shown in chapter~\ref{chap:wybe_to_lpvm}, a Wybe procedure or
-function is flattened to a procedure form very early in the compilation
-pipeline. The dependency resolution is then narrowed to tracking the
-relationship of these flattened procedures to the LPVM procedures they are
-transformed to. A Wybe \textit{procedure A} depends on \textit{procedure B}, if
-it contains a call to \textit{B}. Flattened Wybe procedure can be transformed
-to one or more LPVM procedure.
+The dependent set for a procedure $P_i$ can be divided up into two subsets. The
+first subset $(Q)$ include procedures which in-line $P_i$ in their bodies and
+the second subset $(S)$ just make a call to $P_i$. A procedure $S_j$ only
+depends on some version of the prototype/signature of $P_i$. If we can
+determine that the prototype of the changed procedure $P_i$ has not changed,
+then we can remove the subset $S$ from the dependent set of $P_i$. However, a
+procedure $Q_j$ will always be re-compiled for a change in $P_i$.
 
-If one procedure is changed, the only parts that should be recompiled is that
-procedure itself and some other affected procedures (due to inlining or
-calls). We can check for edits at the parse tree level (in Wybe form) or when
-the LPVM form is generated (before optimisation passes). Checking the Wybe
-source form coincides with the parse tree hashing we are doing above. Every
-Wybe function or procedure is flattened to be a procedure, so when we talk
-about procedures, we are considering all top level items in the module.
+There are also cases where changing a variable name uniformly throughout a
+procedure body would not change it's LPVM form since LPVM will be generating
+it's own unique variable names (like SSA). These kind of edits don't change the
+semantics of the procedure and re-compilation is not needed. To derive gains
+from this observation, we plan to next track relations between the LPVM form
+and object code. Implementing this would require having the ability to load and
+change object code directly from the \textit{TEXT} segment of an object file
+instead of our custom segment. 
 
-If we change a variable name uniformly throughout a procedure body, it's LPVM
-form would not change since LPVM will be generating it's own unique variable
-names. These kind of edits don't change the semantics of the procedure and
-re-compilation is not needed. Hence, it is useful to check LPVM forms of a Wybe
-procedure and on a successful match, we can skip the further optimisation
-passes, loading the final form and object code for those procedures. A Wybe
-procedure, when transformed to LPVM form, might create more than one LPVM
-predicate or procedure. This happens for conditional branching and loops. This
-mapping has to be tracked so that we know which LPVM procedures to load in.
+There are many stages and scenarios like the ones above where we can smartly
+avoid recompilation. In the beginning, the goal is to incorporate the simple
+scenarios which are absolute in its resolution of a recompilation
+need. In-lining across modules causes a domino effect of recompilation of
+multiple procedures. For now, even if we are making small savings for some
+compilation processes, we may be making bigger savings on smaller edits. As
+long as we are able to achieve an overall gain in turn around time over
+multiple builds, we are still doing better than a non-incremental compiler
+since we are performing less compilation passes. The embedded information in
+the object file is loaded in the beginning, which has the side effect of
+increasing the memory consumption of the compilation step but limits IO
+actions. With modern machines, this trade off is acceptable.
+
+\section{Examples of Gains}
+
+The best observable result obtained with the module level reloading is the use
+of Wybe standard library. The entire standard library lives in one file,
+\textit{wybe.wybe}. All the procedures in the types defined in it are
+in-linable, and in fact do expect to get in-lined. With a fresh redistribution
+of the standard library module, a compilation of an arbitrary module
+\textit{foo.wybe} will also build the object file \textit{wybe.o}. This happens
+because the compiler adds the dependency on the module \textit{wybe} implicitly
+for every compilation target. In building \textit{wybe.o}, the LPVM and LLVM
+forms are created from the source code over numerous passes. The LLVM form
+generates the object code, while the LPVM form gets serialised and stored in
+the object file. Hereafter, every compilation done by Wybemk will never build
+\textit{wybe.o}. Instead, the pre-built LPVM form of all the \textit{Modules}
+in it will be loaded and used. Since every call to the standard library is
+mostly in-lined, having the LPVM form proves beneficial. In any particular
+build, this also happens only once even though every module will depend on
+module \textit{wybe}. This is due to the modular compilation pipeline.
+
+
+
+
+
+
+
+
 
 %%% Local Variables:
 %%% reftex-default-bibliography: ("../refs.bib")

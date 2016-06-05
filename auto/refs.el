@@ -6,10 +6,17 @@
     "alpernSSA"
     "cytronSSA"
     "gsa"
+    "ssi"
     "appelfp"
     "cpp_compiler"
     "Lattner:MSThesis02"
     "irnote"
-    "make"))
+    "make"
+    "tichy_recomp_context"
+    "smarter_recompilation"
+    "cost_of_recompilation"
+    "boehmgc"
+    "mir"
+    "sil"))
  :bibtex)
 

@@ -1,165 +1,232 @@
-\chapter{Literature}
+\chapter{Literature Review}
 \label{chap:literature_review}
 
-% describe the outline of the chapter and the papers discussed
-
-The logic program based intermediate representation presented in
-\cite{lpvm2015} is the IR used in the Wybe compiler. It is an integral stage of
-the compilation pipeline and its features and benefits affect a lot of
+The logic language based intermediate representation presented in
+\cite{lpvm2015} is the IR used in the Wybe compiler. It is an integral part of
+the compilation pipeline and its features and structure affect a lot of
 decisions made in the construction of this compiler. The Wybe compiler doubles
-as a showcase for a working implementation of the proposed logic IR. A
-discussion of this paper is presented in section~\ref{sec:horn_clauses}.
+as a showcase for a working implementation of the proposed logic IR. An
+in-depth discussion of this paper is presented in
+Section~\ref{sec:horn_clauses}.
 
-Our goal is to build an incremental compiler which exploits the structure of
-the LPVM IR. Examining the approaches taken by other systems for building
-incremental compilers and understanding their obstacles is important so that we
-can build our system smoothly. An incremental compiler for C++ given in
-\cite{cpp_compiler} presents a working system to compile at the function (or
-object) level instead of the file (or module) level. Their approach is
-discussed in section~\ref{sec:cpp_compiler}.
+Exploring ways to be smarter about recompilation is a common way to add to the
+efficiency of a compiler, independent of the optimisation gains in the actual
+compilation process. A successful compilation process on a statically typed
+language ensures static type safety. Circumventing this process in a bid to
+eliminate redundancy should be done carefully. The advantages of avoiding
+redundant compilation in a lifetime of a project is very noticeable
+\citep{cost_of_recompilation}. There are a lot of different approaches to this,
+and we derive ours by observing these. Discussions on some smart
+(re)compilation processes is presented in section~\ref{sec:other_compilers}.
 
-
-% paper on make and paper no 44
 It's always useful to have a build system in-built in the compiler. The Wybemk
 compiler tries to emulate the famed GNU \textit{Make} \citep{make} build
 system, but without a \textit{Makefile}. The target is passed on the command
-line and the build happens only when the source file is newer than the target
-in its file modification time. Internally a dependency graph is generated, like
-\textit{Make} and a depth first traversal is done for building dependencies. 
+line and the building process runs only when the source file is newer than the
+target in its file modification time. Internally a dependency graph is
+generated like \textit{Make} and a depth first traversal is done for building
+dependencies. By reading the file modification time we can derive an elementary
+heuristic to avoid redundant re-building of a target.
 
-
-% LLVM
 To produce a working compiler we hook into the LLVM compiler infrastructure
 \citep{Lattner:MSThesis02} by providing a transformation from the LPVM IR to
 the LLVM IR. While not an universal IR, LLVM IR is an excellent target due to
-the amount of work that is being done on its machine code generation. Many
-popular languages like Haskell, Rust, etc. are getting LLVM back-ends for the
-same reason. We won't need to rely on all the optimisation possibilities of
-LLVM since we are reliably doing majority of our program analysis and
-simplifications on LPVM. 
+the amount of work that is being done on its machine code generation
+back-end. Many popular languages like Haskell, Rust, etc. are developing LLVM
+back-ends for the same reason. We won't need to rely on all the optimisation
+possibilities of LLVM since we are reliably doing majority of our program
+analysis and simplifications on LPVM. The convenience of transforming an IR to
+another abstract high level IR which has code generators already written for
+it, is incontestable.
+
+A recent example of incorporating a simpler IR form in the middle of the
+compilation pipeline, before LLVM, is the Rust programming language. Rust is a
+new, type robust, systems programming language which is gaining a lot of
+steam. In their pipeline they have introduced a new \textit{middle-level} IR
+called \textit{MIR} \citep{mir}. In their motivation to add another IR before
+the LLVM IR they make an observation on the utility of a simple IR structure in
+incremental compilation. They are using MIR to factor out redundant work by
+doing a similar saving and reloading of IR to disk, like Wybemk. Apart from Rust compiler,
+the compiler for Swift Programming Language is also incorporating its own form
+of IR before the LLVM IR stage. This is called the Swift Intermediate Language
+(SIL) \citep{sil}. Swift programming language is the new language Apple is
+using for building applications for its platforms. The author of this language,
+Chris Lattner, is the same author behind the LLVM project. A lot of the work
+done on the Swift programming language is also contributed to the LLVM
+project. Yet, Swift source is first transformed to SIL before it is finally
+transformed to LLVM.
 
 
-\section{Horn Clauses as an Intermediate Representation \citep{lpvm2015}}
+\section{LPVM: Horn Clauses as an Intermediate Representation}
 \label{sec:horn_clauses}
 
 
-The paper describes a new form of IR using a logic programming structure, now
-called LPVM in the Wybe compiler. Since this thesis extends the LPVM
-implementation by providing code generation for it and harnessing its features
-in building incremental features in the compiler, it's important to understand
-the reasoning behind the structure of LPVM and its benefits over its
-counterparts. LPVM can be compared with the commonly used IR forms like the
-Three Address Code and its Static Single Assignment (SSA) extension
+\cite{lpvm2015} presents a new form of IR using a logic programming structure,
+now called \textbf{LPVM} in the Wybe compiler. Since this thesis extends the
+LPVM implementation by providing code generation for it and harnessing its
+structure in building incremental features in the compiler, it's important to
+understand the reasoning behind the structure of LPVM and the benefits it has
+over its counterparts. LPVM can be compared with the commonly used IR forms
+like the Three Address Code and its Static Single Assignment (SSA) extension
 \citep{alpernSSA}. The paper presents sound discussions of the drawbacks of
 these forms and the other solutions used to solve these drawbacks. The other
 solutions listed extend the SSA form to address its limitations, whereas LPVM
 does not need to make an attempt at doing so. It instead presents a completely
-different structure that is free from these drawbacks from the get-go. This
-structure uses \textit{Horn Clauses} from logic programming imposing certain limitations
-on that form.
+different structure that is free of these drawbacks from the get-go. This
+structure uses \textit{Horn Clauses} from logic programming, imposing certain
+limitations on a general logic language.
 
 The Three Address Code (TAC) IR and its refinement, the Static Single
 Assignment (SSA) form, are popular IRs used in compiler constructions. They are
 simple enough to be universal and can accommodate different source language
 semantics due to their fairly open structure. They can be constructed
 efficiently \citep{cytronSSA} and allow numerous useful optimisation
-techniques. A SSA based IR will generally be laid out as basic blocks and
+techniques. A SSA based IR will generally be laid out as basic blocks with
 branching instructions connecting them, like a graph. The SSA refinement
 requires all variable names to be unique in a block. This makes it easier to
 track variable lifelines. But this also requires a virtual function called
 \phif to choose between the versions of the same variable coming in from two
-alternate predecessor blocks since each of those blocks will have its own name
+alternate predecessor blocks, since each of those blocks will have its own name
 for that variable. Thus, there will be a \phif for every variable whose value
 can arrive from alternative predecessor paths into the current block. This
-function is \textit{fake} and will not have code generated for it. Instead it's
-evaluation is solely for program analysis and requires backtracking into
-analyses of the predecessor blocks to determine the actual path taken by the
-control and determine the resulting abstract value. Even though the SSA form is
-visually simple, it's construction may not be so. The limitations of this form
-is part of the motivation for presenting LPVM.
+function is \textit{virtual} and will not have code generated for it. Instead
+it's evaluation is mainly for program analysis and requires backtracking into
+the analyses of the predecessor blocks to determine the actual path taken by
+the control and determine the resulting abstract value. Even though the SSA
+form is visually simple, it's construction may not be so. The limitations of
+this form is part of the motivation for presenting LPVM.
 
-A \phif does not provide information on the control flow path. Computation of
-the path taken will have to done backwards, by looking into the predecessor
-blocks. Another extension presented in \cite{gsa}, called the Gated Single-Assignment
-(GSA) form, augments the existing \phif function to capture the block
-entering condition. This makes path determination easier, but at the cost of
-adding more complication to the SSA form. The LPVM form on the other hand has a
-more explicit information flow in its basic structure.
+To determine the control flow path to a \phif without looking into a
+predecessor block, an extension to the SSA form, called the Gated
+Single-Assignment (GSA) \citep{gsa}, was created. This extension augments the existing
+\phif function to capture the block entering condition. This makes path
+determination easier, but at the cost of adding more complication to the SSA
+form. The LPVM form on the other hand has a more explicit information flow in
+its basic structure as part of block signatures.
 
 SSA is useful for local block analyses. But the branching of blocks and the
 joining of incoming variables with \phifs are biased to forward analysis. In
 backward analysis it's not trivial to know of the alternate blocks holding
 alternate versions of the variables in the current block. This bias is avoided
-with another extension called the Static Single Information (SSI). This form
-includes another virtual function ($\sigma$) to the end of the blocks which
-branch into alternate blocks which describes the destinations of each alternate
-variable. LPVM provides this information easily as part of its basic structure.
+with another extension called the Static Single Information (SSI) given in
+\cite{ssi}. This form includes another virtual function ($\sigma$) at the end
+of the blocks which branch into alternate blocks, describing the destinations
+of each alternate variable. Again, this information is easily determined in the
+LPVM form.
 
 The unique assignment restriction results in alternate versions of the same
-variable in diverging blocks. Which in turn requires extra work for converging
-back into one variable. Another functional programming form of SSA
-\citep{appelfp} is discussed which avoids duplicate versions of a variable by
+variable in diverging blocks. Which, in turn, requires extra work for
+converging back into one variable. Another functional programming form of SSA
+\citep{appelfp} is presented, which avoids duplicate versions of a variable by
 replacing branching with function calls and \phifs with parameter
 passing. Every alternate block will replace its jump to the converging
 destination with a function call. Even though this is a declarative form just
 like LPVM, it still makes information flow explicit only in the forward
-direction by specifying only the in flowing parameters. LPVM instead provides
-the input and output parameters for a block.
+direction by specifying only the \textit{in} flowing parameters. LPVM instead
+presents the in-flowing and out-flowing parameters for its block equivalent,
+making local analysis much simpler.
 
 So far every drawback of SSA has been addressed can be solved by creating an
 extension to the SSA structure. While these are perfectly feasible, they are
 additional complexities. In the case of LPVM these problems are solved at the
 basic structural level, without any special functions.
 
-The LPVM IR is a restricted form of a logical language. It does not feature
-non-determinism seen commonly in a LP. Therefore all input parameters have to
+The LPVM IR is a restricted form of a logical language. It does not feature the
+non-determinism seen commonly in a LP. Therefore, all input parameters have to
 be bound to a value before calling that procedure. It also requires fixing the
-mode of a parameter. In LP, a procedure can have a parameter which can behave
-as an input or an output. LPVM requires this behaviour to the explicit and
-fixed for every parameter. These restrictions makes LPVM surprisingly easy to
-read and reason with.
+mode of every parameter. In LP, a procedure can have a parameter which can
+behave as an input or an output. LPVM requires this behaviour to the explicit
+and fixed for every parameter. These restrictions makes LPVM surprisingly easy
+to read and reason with. We will see it's implemented structure in
+Chapter~\ref{chap:lpvm}.
 
-
-At the top level LPVM form there are only predicates (or procedures). In the
-form presented in the paper a procedure consists multiple \textit{Horn
+At the top level of an LPVM form there are only predicates (or procedures). In
+the form presented in the paper a procedure consists of multiple \textit{Horn
   Clauses}. The \textit{Head} of a \textit{Clause} describes its parameters and
-predicate name. These parameters can be in-flowing or out-flowing. In the
-abstract model the output parameters are separated from the input parameters
-with a semi-colon. If we look at a \textit{Clause} body as a block in SSA,
-then unlike SSA we have explicit information on all the variables entering and
-exiting the block without any extra virtual functions.
+the predicate/procedure name it belongs to. These parameters can be in-flowing
+or out-flowing. In the abstract model the output parameters are separated from
+the input parameters with a semi-colon. If we look at a \textit{Clause} body as
+a block in SSA, then unlike SSA, we have explicit information on all the
+variables entering and exiting the block without any extra virtual functions.
 
-For a predicate or procedure call in LPVM, only one of its \textit{clauses} will be
-executed. This is due to LPVMs' enforcement of determinism. That clause can be
-seen as the entire procedure itself with the \textit{Head} as the procedure
-prototype. The parameters to a clause also needs its modes to be explicitly
-defined: either as an input or an output. There may be two alternative
-\textit{Clauses} of the same name having switched up modes for the same
-parameters. Since determinism will select only one of them as the procedure,
-single modedness is preserved. The goals in the \textit{Clause} body can be a
-guard goals (conditionals) or be simple goals. Guard goals should create a fork
-in the control flow through the body. But in LPVM this is mitigated by creating
+For a predicate or procedure call in LPVM, only one of its \textit{clauses}
+will be executed. This is due to LPVMs' enforcement of determinism. That clause
+can be seen as the entire procedure itself with the \textit{Head} as the
+procedure prototype. There may be two alternative \textit{Clauses} with the
+same name having switched up modes for the same parameters. Since determinism
+will select only one of them as the actual procedure, single modedness is
+preserved. The goals in the \textit{Clause} body can be a guard goals
+(conditionals) or be simple goals. Guard goals should create a fork in the
+control flow through the body. But in LPVM this is mitigated by creating
 another \textit{Clause} which has the same sequence of goals up to this guard,
 but thereafter follows the complimentary evaluation. Hence, the control flow is
-explicit unlike SSA. The actual implementation, discussed in a later chapter,
-is a little different in its data structure for branching. But the behaviour is
-preserved. 
-
+explicit unlike SSA. The actual implementation, discussed
+chapter~\ref{chap:lpvm}, is a little different in its data structure for
+branching. But the behaviour is preserved.
 
 \begin{figure}
-  \begin{minipage}{.5\textwidth}
+  \begin{center}
+  \begin{minipage}{4cm}
+\begin{Verbatim}[commandchars=\\\{\},fontsize=\small]
+int \textbf{gcd} ( int a, int b ) 
+\{
+  \textbf{while} ( b \textbf{!=} 0 ) \{
+     int \textit{temp} \textbf{=} b; 
+     b \textbf{=} a \textbf{%} \textit{temp};
+     a \textbf{=} \textit{temp};
+  \}
+  \textbf{return} a;
+\}
+\end{Verbatim}
   \end{minipage}
+\end{center}
+\caption{A Simple C-like \textit{GCD} function}
+  \label{fig:gcd}
+\end{figure}
+
+\begin{figure}
+  \fbox{\begin{minipage}{.45\textwidth}
+    \begin{minipage}{0.4\textwidth}
+      \begin{math}
+        \mathbf{entry:} \\
+        br\ \mathrm{header}
+      \end{math}
+    \end{minipage}
+    \begin{minipage}{0.4\textwidth}
+      \begin{math}
+        \mathbf{tail:} \\
+        return\ a_1
+      \end{math}
+    \end{minipage} \\
+    \\
+    \begin{math}
+      \mathbf{header:} \\
+      b_1 = phi(b, b_0) \\
+      a_1 = phi(a, a_0) \\
+      if\ (b_1 \neq 0)\ \mathrm{body}\ \mathrm{tail} \\
+    \end{math} \\
+    \begin{math}
+      \mathbf{body:} \\
+      t_0 = b_1 \\ 
+      b_0 = a_1\ mod\ t_0 \\
+      a_0 = t_0 \\
+      br\ \mathrm{header} \\
+    \end{math} 
+
+  \end{minipage}
+}
+\hfill\vline\hfill
   \begin{minipage}{.5\textwidth}
     \begin{align*}
-      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b != 0 \\
+      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b \neq 0 \\
                     &\wedge mod(a,b,?b') \\
                     &\wedge gcd(b,b',?ret) \\
       \\
       gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b == 0 \\
-      &\wedge ret=a \\
+                    &\wedge ret=a \\
     \end{align*}
   \end{minipage}
-  \caption{Comparison of SSA and LPVM for the gcd function.}
+  \caption{Comparison of the SSA and LPVM clause forms for the GCD function}
   \label{fig:gcd_ssa_lpvm}
 \end{figure}
 
@@ -174,57 +241,156 @@ calls. We know which variables the body of the procedure (or its
 procedure signature. There is no need for return instructions or \phifs. This
 also makes purity reasoning explicit. Everything that a LPVM procedure affects
 (in terms of \textit{registers} or other \textit{resources}) have to be
-declared in the signature or \textit{Head}. The Figure~\ref{fig:gcd_ssa_lpvm}
-demonstrates these differences of semantic structure between the SSA and LPVM
-for a simple \textit{gcd} function.
+declared in the signature or \textit{Head}.
+
+The Figure~\ref{fig:gcd_ssa_lpvm} demonstrates these differences of semantic
+structure between the SSA (on the left) and LPVM \textit{clause} form (on the
+right) for a simple \textit{gcd} function (Figure~\ref{fig:gcd}). The
+\textit{gcd} function takes two numbers $a$ and $b$ (where $a < b$) and
+computes the \textit{Greatest Common Divisor} between them. We will follow this
+example until its final conversion to LLVM in this thesis. The \textit{header}
+block in the SSA section is the loop header. This block is entered at the start
+of the program (\textit{entry}) or on the next iteration of the loop (from
+\textit{body}). Both these converging branches will bring their own version of
+$b$ and $a$, and hence a \phif is needed. The \textit{clause} form on the right
+looks much simpler. It presents two \textit{clauses} of \textit{gcd} predicate
+(or procedure). The first one is called for $b \neq 0$, and the other for its
+complimentary evaluation. Parameter passing deals with different versions and
+values on each iteration (recursion here). We don't need different names for
+the same variable.
 
 % one last concluding paragraph
 
+\section{Other smart recompilation strategies}
+\label{sec:other_compilers}
 
-\section{Achieving Incremental Compilation through\\ Fine-grained Builds
-  \citep{cpp_compiler}}
-\label{sec:cpp_compiler}
+Our goal is to build an incremental compiler which exploits the structure of
+the LPVM IR at compile time. To achieve this we want the granularity of the
+compilation to be smaller than that of traditional source files. If we can
+isolate and identify object code for certain blocks in the source file, we can
+define the compilation process to be composed entirely of these smaller
+blocks. An incremental compiler for C++ given in \cite{cpp_compiler} presents a
+working system which compiles at the function (or object) level as opposed to
+the file (or module) level. Their approach is discussed in
+section~\ref{sssec:cpp_compiler}.
 
-The system given by \cite{cpp_compiler} is a incremental integrated program
-development system for C++ called \textit{Barbados}. It contains a build system
-with a granularity of functions and procedures instead of the usual file level
-granularity. This is quite similar to the build system we want for Wybe. The
-requirements for building such a system, as listed in the paper, involve
-automatic dependency inference, transparent compilation, and ensuring no old
-code is executed. These are also the requirements we want the Wybe compiler to
-follow. The actual implementation of the system is quite different from what we
-want in our compiler though. While Barbados focuses on building an interactive
-system which lazily compiles code given to it, while deciding whether to do a
-re-compilation, Wybe wants the incremental features to kick in during
-compilation of a full source code module. The compilation is also done from the
-source code to object code in Barbados, whereas for the Wybe compiler, the
-tracked compilation will be considering the LPVM structure in the middle too.
+Another approach for avoiding unnecessary recompilation is analysing the change
+in context of a module that an source edit causes and accordingly compiling
+only modules affect by that change \citep{tichy_recomp_context}. A context is
+defined as an interface of a module which can be manually or automatically
+generated in a compilation process. This approach is discussed in
+section~\ref{sssec:smart_recompilation}.
+
+
+\subsection{Decreasing compilation granularity}
+\label{sssec:cpp_compiler}
+
+The system described in \cite{cpp_compiler} is an incremental interactive
+program development system for C++ called \textit{Barbados}. It features a
+compilation system with a granularity focused at the level of functions and
+other top level structures instead of the usual file level granularity in other
+C++ compilers. This is quite similar to the build system we want for Wybe,
+without the interactive part. The requirements for building such a system, as
+listed in the paper, involve automatic dependency inference for the chosen
+granularity, transparent compilation, and ensuring no old code is ever
+executed. These are also the constraints we want the Wybe compiler to work
+with. The functioning implementation of the system is quite different from what
+we want in our compiler though. While Barbados focuses on building an
+interactive system which lazily compiles code given to it, while deciding
+whether to do a re-compilation, Wybe wants the incremental features to kick in
+during compilation of a full source code module. The compilation is also done
+from the source code to object code in Barbados without exploiting intermediate
+structures, whereas for the Wybe compiler, the tracked compilation will be
+considering the LPVM structure in the middle too.
 
 The code structures that Barbados considers at the lowest granular level of
 compilation are chosen in a way that dependencies between them can be generated
-automatically. The first step highlighted by the paper is the tracking of these
-dependencies. There is also an emphasis on having a separation of interface and
-body for all of the basic entities of compilation. If an interface is able to
-completely reflect a need for compilation in the body then the body is only
-re-compiled on an interface change. The use of time stamps along with the
-dependency tracking can ensure that the correct versions of compiled code can
-be used. These constraints are sound and tested, and as such are ensured in the
-Wybe compiler.
+automatically. The first necessary step, highlighted by the paper, is the
+tracking of these dependencies. There is also an emphasis on having a
+separation of interface and body for all of the basic entities of
+compilation. If an interface is able to completely reflect a need for
+compilation in the body then the body is only re-compiled on an interface
+change. The use of time stamps along with the dependency tracking can ensure
+that the correct versions of compiled code can be used. These time stamps are
+part of the interface for all basic entities. Although using time stamps to
+determine the need for recompilation is simple and effective.
 
 Barbados tackles the dependency tracking problem by maintaining a tree like
 structure to show dependencies. The entities can be involved in a transitive
 closure of dependencies. For every compilation the root of the tree is
-targeted. The system then moves through the tree until it reaches a leaf and
-then works it way back from there. This way it can ensure that is it dealing
-with dependencies in the correct order. There are a couple of problems that can
-arise with this structure such as circular dependencies and the volatility of
-dependencies during tree traversal. These problems are solved by multiple
-traversals of the tree. The paper finds that the time spent in multiple
-traversals is negligible when compared to compilation times, providing support
-for this approach. The heuristic for change in an entity is a time stamp. While
-these are effective for propagating change, it may be missing cases when the
-same entity is saved over the old one. The time stamp changes but structurally
-nothing has changed.
+targeted. Every compilation is done in a declarative fashion over this
+tree. Starting from the root, the system moves through the tree until it
+reaches a leaf and then works it way back from there. This way it can ensure
+that it is dealing with dependencies in the correct order. There are a couple
+of problems that can arise with this traversal, such as circular dependencies
+and the change of dependencies during tree traversal. These problems are solved
+in Barbados by doing multiple traversals of the tree until a stable state is
+reached. The paper finds that the time spent in multiple traversals is
+negligible when compared to compilation times, providing support for this
+approach. However, it does feel wasteful. The heuristic for change in an entity
+is a time stamp. While these are effective for propagating change, it may be
+missing cases when the same entity is saved over the old one. The time stamp
+changes but structurally nothing has changed. We can observe that these cases
+are few, but since they are so trivial it should be checked. In our system we
+also use hash comparisons to detect changes instead of time stamps. It is
+feasible for Wybemk as the LPVM structure is very limited and easy to hash.
+
+\subsection{Smart Recompilation}
+\label{sssec:smart_recompilation}
+
+The goal and motivation of this implementation is similar to Wybemk: avoid
+redundant recompilation on minor changes. Similar to the C++ incremental
+compiler \citep{cpp_compiler}, being able to maintain a complete dependency
+relation reliably is important. This relation is maintained between contexts of
+compilation units involved, and on determination of a change, only the
+dependent or affected units are recompiled. Contexts here are similar to C
+header files which expose an interface of a module. A module here refers to the
+smallest block the source language compiler can compile independently and for
+which a context can be generated. Thus if another module \textit{includes} a
+context, it is dependent on that context. Unlike our system, the determination
+of a change here is done by a version control system. A module context is said
+to have changed if the controller determines a revision on the old
+context. This can be more effective at pointing out editing changes which
+didn't actually change anything except the last modification time. In our
+system, we try to deal with these scenarios with internal hash comparisons
+instead of being reliant on an external version control system.
+
+Although, the behaviour of this external controller is shown to be very
+useful. It is a combination of the Make utility and a Revision Control
+System. Apart from tracking the compiled object files, it maintains a list of
+attributes for them. These attributes contain history of compilation and past
+compilation configurations. When a target object code is to be compiled, it
+behaves in a Make like fashion by recursively visiting the object files in the
+target's past configuration attribute to determine the changed contexts. It
+updates these attributes on a re-compilation or a re-use accordingly. When
+multiple contexts have changed, on which the target depended on, each context
+is visited one after the other and checked in a similar fashion as the target. 
+
+While the ideas explored in the above system skip a lot of redundant
+recompilation steps, it is limited by the granularity of the source
+language. Even the paper notes this by realising that it won't be able to
+eliminate all redundant compilation on smaller changes. Also, on multiple
+context changes, the system could have adopted a better traversal methodology.
+The current traversal is not accommodating inconsistencies arising in the
+middle of traversal. In contrast, the system described in \citep{cpp_compiler}
+does multiple traversals to deal with any new information generated in the
+middle of the dependency traversal. But overall, the smart compilation
+algorithm is able to ensure that the correct compiled code is being used.
+
+Improving on this smart recompilation algorithm, a smarter recompilation
+approach is presented in \citep{smarter_recompilation}, which relaxes the
+consistency criteria so that more re-compilations can be avoided. However, in
+their approach a prompt to the programmer is required who selects a subset of
+the source files affected by a change to continue with the algorithm. This
+affects the transparency requirement we want, and which \cite{cpp_compiler}
+insists upon as well.
+
+The above strategies have shown a common focus on generating accurate
+dependencies for a chosen compilation unit. Avoiding recompilation of a
+complete module on no change is also a common and easy to implement
+strategy. While the base ideas incorporated in Wybemk are similar to the above
+strategies, we have a new and different intermediate structure to play around
+with. Our approach will naturally be a little different.
 
 %%% Local Variables:
 %%% reftex-default-bibliography: ("../refs.bib")

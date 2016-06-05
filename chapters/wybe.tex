@@ -29,7 +29,7 @@
 
 \textit{end} \\
 
-\caption{Sample of the wybe.int module from Wybe standard library}
+\caption{Sample of the \textit{wybe.int} module from Wybe standard library}
 \label{fig:wybe_int}
 \end{figure}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -60,77 +60,130 @@
 \end{figure}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
 Wybe is a new multi-paradigm programming language, featuring both imperative
 and declarative constructs. At the top level it contains both functions and
-procedures. A function header specifies the inputs and their types, and the
+procedures. A function header specifies its inputs and their types, and the
 output expression type. The body of the function will be an expression
-evaluating to a value of that specified out type. Whereas a procedure header
-specifies its inputs and outputs (along with their types), and any mutable or
-external resource it works with (like IO). Its body will contain sequential
-statements which build those outputs from the inputs. There is no return
-statement, as at the end of the procedure body the specified outputs will be
-returned. In a way, a procedure header lists the parameters which will be used
-in its body, and fixes the flow mode (input flow or output flow) for each of
-them.
+evaluating to a value of that specified out type, similar to a function in
+other declarative languages. Whereas, a procedure header specifies its inputs
+and outputs (along with their types), and any mutable or external resource it
+works with (like IO). Its body will contain sequential statements which build
+those outputs from the inputs. There is no return statement, as at the end of
+the procedure body the specified outputs will be returned. The procedure header
+lists all the important parameters which will be used in its body, and fixes
+the flow mode (input flow or output flow) for each of them.
 
-Wybe is statically typed with a strong preference for interface integrity. A
-function or procedure header should define all it's input and output types,
-along with any mutable resources that will be affected by it. By forcing the
-information flow to be explicit, Wybe makes it easy to determine the purity of
-the function just by looking at a function or procedure prototype. There is
-also no requirement for an interface or header file. Variables in Wybe can be
-adorned to explicitly define their direction of information flow. A variable
-can flow in (x), flow out (?x), or both ways (!x). The Wybe model of explicit
-information flow is quite similar to the LPVM predicates, making LPVM a good
-fit for this language.
+Wybe is statically typed with a strong preference for \textbf{interface
+  integrity}. Both functions and procedures are able to present a pure
+interface. A function or procedure header should define all of it's input and
+output types, along with any mutable resources that will be affected by it. By
+also forcing the information flow to be explicit, Wybe makes it easy to
+determine the effect of a function or procedure just by looking at its
+prototype.  Variables in Wybe can be adorned to explicitly define their
+direction of information flow. A variable can flow in (x), flow out (?x), or
+both ways (!x). Thus, a procedure header which looks like: $proc\ mul(a,?b,c)$,
+says that the procedure \textit{mul} operates on two input parameters at
+positions $a$, $c$, and builds one output at parameter position $b$. There is
+also no requirement for an interface or header file. With procedures having a
+preceding visibility label (\textit{private} or \textit{public}), it is very
+easy to automatically generate an interface for a module.
 
-With Wybe, a module is equivalent to a wybe source file. The module name is
-same as the source file without the extension. The module's interface consists
-of the public functions and procedures in the module. There is also a separate
-syntax to declare sub-modules inside the full file module. Sub-module names are
-qualified with the outer modules' name. For example a module \textit{A.B.C} is
-the sub-module of \textit{A.B}, which is a sub-module of \textit{A}, which is
-the module of the source file \textit{A.wybe}. Defining new types also creates
-a new sub-module. All dependencies of a module can be inferred through the top
-level \textit{use module} statements in the source file.
+A Wybe \textbf{module} is equivalent to a Wybe source file with the extension
+\textit{.wybe}. The module name is the same as the source file name, but
+without the extension. A module interface consists of the public functions and
+procedures defined in it. There is also a separate syntax to declare
+sub-modules inside a module. Sub-module names are qualified with the
+outer/parent modules' name. For example a module \textit{A.B.C} is the
+sub-module of \textit{A.B}, which is a sub-module of \textit{A}, which is the
+module of the entire source file \textit{A.wybe}. This also means that
+importing module \textit{A} will give you access to its sub-modules. Defining
+new types also creates a new sub-module named after that type. All dependencies
+of a module can be inferred through the top level \textit{use module}
+statements in the source file. Sub-modules have the dependency of the
+super-module automatically added to their interfaces. Hence, a sub-module can
+access the interface of its sibling modules. When \textit{module A uses module
+  B}, \textit{module A} can call all the public functions and procedures of
+\textit{module B}.
 
-Types in Wybe are simply modules. Standard Wybe considers {int},
+A Wybe module can contain statements outside any procedure, as top level
+statements. These are always executed in order when the module is called or
+imported. The idea here is to insert module initialisation and setup code here
+which is required to run even on imports. For example, a module defining an
+interface to access a database can have automatic initialisation code in top
+level statements to set up the connection to the database.
+
+
+\begin{figure}
+
+\begin{Verbatim}[frame=single,label=Simple Statement,labelposition=topline,framesep=4mm,fontsize=\small,commandchars=\\\{\}]
+println("Hello, World!")
+\end{Verbatim}
+
+  \begin{Verbatim}[frame=single,label=Factorial Function,labelposition=topline,framesep=4mm,fontsize=\small,commandchars=\\\{\}]
+public func factorial(n:int):int =
+    if n <= 0 then 1 else n * factorial(n-1)
+\end{Verbatim}
+
+    \begin{Verbatim}[frame=single,label=Factorial Procedure with IO,labelposition=topline,framesep=4mm,fontsize=\small,commandchars=\\\{\}]
+public proc factorial(n:int) use !io
+    ?result = 1
+    do while n > 1
+       ?result = result * n
+       ?n = n - 1
+    end
+    println(result)
+end
+\end{Verbatim}
+
+  
+  \caption{Sample Wybe programs}
+  \label{fig:wybe_programs}
+\end{figure}
+
+\textbf{Types} in Wybe are simply modules. Standard Wybe considers {int},
 \textit{float}, \textit{char}, \textit{string} as primitive types. In reality
 these are just types provided by the Wybe standard library module, which can be
 replaced with any other flavour of a standard library. Defining basic types
-requires just specifying its memory layout (in terms of word sizes) and
+just requires specifying its memory layout (in terms of word sizes) and
 providing procedures or functions to interact with the basic type. A sample
-from the \textit{wybe.int} type module is shown in Figure~\ref{fig:wybe_int}. This
-type definition is in the source file \textit{wybe.wybe}, making \textit{int} a sub-module
-of the module \textit{wybe}. This \textit{int} type sets the size of its
-members to be \textit{i64}, a syntax borrowed from LLVM, occupying 64 bits. 
+from the \textit{wybe.int} type module is shown in
+Figure~\ref{fig:wybe_int}. This type definition is in the source file
+\textit{wybe.wybe}, making \textit{int} a sub-module of the module
+\textit{wybe}. This \textit{int} type sets the size of its members to be
+\textit{i64}, a syntax borrowed from LLVM, occupying 64 bits.
 
 More compound types can be defined in terms of basic types or other compound
-types. Wybe has \textit{algebraic data types}. The \textit{bool} type can in
-this way with two type constructors, as shown in
+types. Wybe has \textit{Algebraic Data Types} too. The \textit{bool} type can
+be defined as an ADT with two type constructors, as shown in
 Figure~\ref{fig:wybe_bool}. The compiler will infer the storage for members of
 this type. 
 
-
-Procedures (and even functions) in Wybe can be polymorphic. Multiple Wybe
-procedures can have the same name but with different paramter types and
+Procedures (and even functions) in Wybe can be \textbf{polymorphic}. Multiple
+Wybe procedures can have the same name but with different paramter types and
 modes. For example, a procedure to add two numbers can have the following
-prototypes: \textit{add(x, y, ?z)}, \textit{add(x, ?y, z)}, \textit{add(?x, y,
-  z)}. The call \textit{add(3, ?t, 5)} will evaluate \textit{t} to be
-\textit{2}. This selection is done in the Type checking pass during
-compilation, which matches calls to the definition with the correct types and
-modes.
+overloaded prototypes: \textit{add(x, y, ?z)}, \textit{add(x, ?y, z)},
+\textit{add(?x, y, z)}. The call \textit{add(3, ?t, 5)} will evaluate
+\textit{t} to be \textit{2}. This selection is done in the Type checking pass
+during compilation, which matches calls to the definition with the correct
+types and modes. The above definitions model multiple parameter modes of a
+logic language in a way. Having the three definitions as above, the procedure
+\textit{add} can be called with any single of it's parameters un-bound (as an
+output).
 
-% talk about resources
-Resources in Wybe are a way to specify some data that the procedure uses or
-modifies without explicitly being a part of the procedure arguments. This is an
-easy and pure way to list the side-effects of a procedure. An example of a
-resource in standard Wybe is \textit{IO}. When a procedure says it is using the
-\textit{IO} resource, we know it will be accessing some IO interface along with
-building its output parameters. For example: \textit{public proc greet use
-  io}.
+\textbf{Resources} in Wybe are a used to specify some data that the procedure
+uses or modifies without explicitly being a part of the procedure
+arguments. This is an easy and pure way to list the side-effects of a
+procedure. An example of a resource in standard Wybe is \textit{IO}. When a
+procedure says it is using the \textit{IO} resource, we know it will be
+accessing some IO interface along with building its output parameters. For
+example: \textit{public proc greet use io}. Custom resources can also be
+defined.
+
+
+
+
+On the imperative side, Wybe does have loops. Figure~\ref{fig:wybe_programs}
+shows a few examples of Wybe programs to introduce the general syntax.
 
 
 %%% Local Variables:

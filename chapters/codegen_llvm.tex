@@ -1,83 +1,132 @@
 \chapter{Code Generation to LLVM}
 \label{chap:codegen_llvm}
 
-We do not generate machine code directly using LPVM IR. Instead we are hooking
-into the LLVM project so that we are able to compile Wybe programs on multiple
-architectures without additional effort. Without the LLVM we would have to
-write code generators for every popular architecture and more. LLVM is a
-popular open source project. A lot of older compilers (and new) are being
-re-targeted to LLVM IR, and the efforts taken previously in making the machine
-code generator efficient is being poured collectively into LLVM. We feel it's
-worthwhile to do the same for Wybe. 
+We do not generate machine code directly from the LPVM IR form. Instead we are
+hooking into the LLVM framework \citep{Lattner:MSThesis02} so that we are able
+to compile Wybe programs on multiple architectures without additional
+effort. In this chapter this transformation from LPVM to the LLVM IR form is
+presented. Without the LLVM project we would have to write code generators for
+every popular architecture and more. LLVM is a popular open source project with
+a lot of collective effort being poured into it. A lot of older mature
+compilers (and new) are also being re-targeted to LLVM IR, and the efforts
+taken previously in making the machine code generator efficient is being poured
+into LLVM. We feel it's worthwhile to do the same for Wybe.
 
 The LLVM IR has an abstract structure of an imperative program, and is a SSA
-based form. Earlier we talked about how LPVM IR solves the drawbacks of the
-using SSA naming scheme and virtual functions, and yet we are ultimately
-targeting a SSA based IR. We do this based on the observations that we are
-doing majority of our optimisation and program analysis in the LPVM stage, and
-the simplified LPVM form does not need the \phif to be present in the LLVM
-IR. In its final stage, LPVM procedure body primitives behave like calls to
-other procedures or virtual instruction calls. Generating LLVM IR on these
-bodies is very direct. We take a deeper look at these conversions in
-section~\ref{sec:lpvm_to_llvm}.
+based form. Earlier we talked about how LPVM IR solves the drawbacks of the SSA
+naming scheme and its virtual functions, and yet we are ultimately targeting a
+SSA based IR. We do this based on the observations that we are doing majority
+of our optimisation and program analysis in the LPVM stage, and the simplified
+LPVM form does not need the \phif to be present in its LLVM IR
+transformation. In its final stage, basic LPVM procedure bodies end with
+building it's outputs or a fork. This fork does not merge back into another
+block. Instead, every other basic body in the fork will either terminate
+finishing its work or will end in a call to another procedure. With no
+converging bodies, there is no need for using a \phif in LLVM. Generating LLVM
+IR on these bodies is very direct. We take a deeper look at these conversions
+in section~\ref{sec:lpvm_to_llvm}.
 
 Using the compiler tools provided by LLVM framework, we can create object code
-from the IR easily. For accessing instructions not provided by LLVM, we link in
-a shared C library. Since the C compiler \textit{clang} compiles C using LLVM,
-we can either join the LLVM form of this library with ours or just using the
-system linker to link object files. Using this library we can provide a
-stronger support for compound types, as discussed in
-section~\ref{sec:type_codegen}.
+from the LLVM IR easily. We then use the system linker to link these object
+files. For accessing instructions not provided by LLVM, we link in a custom
+shared C library. Currently this library allows access to a few standard IO
+functions and the \textit{stdlib} of C. Since the C compiler \textit{clang}
+compiles C using LLVM, we can either join the LLVM form of this library with
+ours or just using the system linker to link object file versions. Using this
+library we can provide a stronger support for compound types which need access
+to heap memory, as discussed in section~\ref{sec:type_codegen}. Finally we
+discuss how we do our dependency linking and deal with top level code for every
+dependency in section~\ref{sec:linking}.
 
 
 \section{Transforming LPVM to LLVM}
 \label{sec:lpvm_to_llvm}
 
-
 Since LLVM is based on an imperative form, we have to transform each LPVM
-procedure back into an imperative function. Wybe and LPVM IR support procedures
-with multiple outputs, but imperative functions do not do so by default. This
-flexibility should be reflected in the LLVM IR as well. Having multiple outputs
-are an abstraction of placing values in multiple registers at the end of the
+procedure back to an imperative function. A imperative function and a procedure
+are somewhat similar in that they both have a sequence of imperative statements
+as their body. Wybe and LPVM IR support procedures with multiple outputs, but
+imperative functions do not do so by default. We need the flexibility of
+multiple outputs reflected in the LLVM IR as well. Having multiple outputs is
+an abstraction of placing values in multiple registers at the end of the
 execution of a procedure body. In LLVM each register is virtually reflected by
 a variable name or an aggregate structure. We wrap the multiple values which
-are to be returned by a procedure in a register structure. The values are
-unwrapped in the body of the caller in the same order.
+are to be returned by a procedure in a register \textit{structure}. The values
+are unwrapped in the body of the caller in the same order. This aggregate
+structure type is allocated on the stack of the function instead of the heap,
+making it similar to a local variable. The nameless procedure which holds the
+top level statements of the module is transformed to \textit{module.main}
+function. The prefixed module name is used to differentiate from \textit{main}
+functions of other modules.
+
+% describe the LLVM form here
+The LLVM IR looks like a C program. At the top level, it contains
+\textit{declare} statements (to refer to an extern function or global constant)
+and \textit{functions}. A function has a return type and parameters defined
+exactly like a C function. Void functions are acceptable. The body of a
+function is composed of basic blocks. A basic block ends with a
+\textit{terminator} statement which is either a return statement
+(\textit{ret)}) or a branching statement \textit{br}. A basic block will branch
+into alternate basic blocks. Eventually the basic blocks converge, possibly to
+a block with a $\varphi$\textit{-function}. Statements in a basic block are
+\textit{instruction} calls. LLVM provides numerous predefined
+\textit{instructions} for which it can generate machine code. They model
+\textit{instructions} of an assembly language. Examples of some
+\textit{instructions} are: \textit{add}, \textit{sub}, \textit{icmp},
+\textit{store} .etc. LLVM uses pointers and indexing to access memory locations
+in the heap. Allocation of heap memory is left up to the programmer to
+implement. The correctness of the bounds in indexing is also left to the
+programmer. There are no exceptions. LLVM provides a few compound data
+structures like the structure, array, and vector as well. Being a high level IR
+it assumes an abstraction of infinite registers. The LLVM framework also
+provides numerous tools and utilities to compile, assemble, disassemble, link,
+optimise, .etc. LLVM IR modules.
 
 Referring to the structure in Figure~\ref{fig:lpvm_data_type}, we know that a
-LPVM primitive statement is either a LPVM \textit{local} procedure call or a
-\textit{foreign} call. We said these calls are meant as a directive for the
-compiler to generate specific machine code for. For a \textit{foreign} call of
-the form: \textit{foreign group proc\textunderscore name(..args..)}, we expect
-an \textit{instruction} provided by the given \textit{group} to replace the
-call in the generated LLVM IR. Currently in our implementation, we have three
-types of foreign groups: \textit{c}, \textit{llvm}, and \textit{lpvm}. Foreign
-calls with the group \textit{c} refer to functions defined in the shared C
-library file which is linked in later. In the LLVM IR these are called by
-declaring this function name as an \textit{extern} and making a \textit{call}
-to it. Foreign calls with the group \textit{llvm} refer to LLVM instructions
-directly by name. The \textit{args} will be type tested and the validity of the
-call ensured at code generation again. Foreign calls to \textit{lpvm} are
-special functions whose underlying implementation can be provided by
-anyone. Currently we have memory allocation and mutation functions in this
-group, and we use \textit{C} functions to provide the object code.
+LPVM primitive statement is either a \textit{local} procedure call or a
+\textit{foreign} call. We mentioned earlier that these calls are meant as a
+directive for the compiler to generate specific machine code. For a
+\textit{foreign} call of the form: \textit{foreign group proc\textunderscore
+  name(..args..)}, we expect an \textit{instruction} provided by the given
+\textit{group} to replace the call in the generated LLVM IR. Currently in our
+implementation, we have three types of foreign groups: \textit{c},
+\textit{llvm}, and \textit{lpvm}. Foreign calls with the group \textit{c} refer
+to functions defined in the shared C library file which is linked in later. In
+LLVM IR these are called by first declaring this function name as an
+\textit{extern} and then generating a \textit{call} instruction for it. Foreign
+calls with the group \textit{llvm} refer to LLVM instructions directly by
+name. The \textit{args} will be type tested and the validity of the call
+ensured at code generation. Foreign calls to \textit{lpvm} are special
+functions whose implementation can be provided by anyone. Currently we have
+memory allocation, access, mutation functions in this group, and we use
+\textit{C} functions to provide the implementation. This is discussed in more
+detail in section~\ref{sec:type_codegen}.
 
-The \textit{GCD} function that we showed the LPVM transformation of earlier, is
-shown being translated to LLVM in Figure~\ref{fig:lpvm_to_llvm}. The two clause
-branches spawned off the condition on \textit{b} end either in a
-\textit{return} instruction and a procedure call respectively. An
-\textit{foreign} call like \textit{foreign llvm add(a:int, b:int, ?c:int)} will
-have to converted to a function call. This call translates to the LLVM IR
-instruction \textit{add} which adds two integers. Transforming a procedure call
-to a function call is quite trivial in most scenarios. The function call
-version for the above example is: \textit{c = add i32 a, b} (actual variable
-names look much different in LPVM and LLVM).
+The \textit{GCD} function for which we showed the LPVM transformation earlier,
+is now shown being translated to the LLVM IR in
+Figure~\ref{fig:lpvm_to_llvm}. The two clause branches spawned off the
+condition on goal \textit{b} end in a \textit{return} statement and a procedure
+call respectively. An \textit{foreign} call like \textit{foreign llvm
+  add(a:int, b:int, ?c:int)} will have to converted to a function call. This
+call translates to the LLVM IR instruction \textit{add} which adds two
+integers. Transforming a procedure call to a function call is quite direct in
+most scenarios. The function call version for the above example is: \textit{c =
+  add i32 a, b} (actual variable names look much different in LPVM and LLVM).
 
-LPVM replaces loops with tail call recursion. For LLVM IR to generate efficient
-machine code, it is extremely important to ensure that the LLVM tail call
-optimisation is turned on. This requires turning on certain flags in the
-\textit{call} instruction generated in LLVM IR, and ensuring the call is indeed
-a tail call in the imperative function body representation of the procedure.
+We have seen that LPVM replaces loops with tail call recursion. For LLVM IR to
+generate efficient machine code, it is extremely important to ensure that the
+LLVM tail call optimisation is turned on. This requires mentioning certain
+flags in the generated \textit{call} instruction and ensuring that the correct
+calling convention is used. We also have to tell the LLVM code generator to
+optimise these marked calls with the \textit{-tailcallopt} optimisation
+flag. Finally, the function call must be an actual tail call. Since the block
+has to return a value in its terminating statement, a function call can't
+actually be in the tail position of a function. However, if a return
+instruction follows the actual call and returns the value returned by the
+function or returns void, that call is considered to be a tail call. In
+Figure~\ref{fig:lpvm_to_llvm} the recursive call to \textit{gcd} is an example
+of a LLVM tail call.
+
 
 
 \begin{figure}
@@ -101,35 +150,174 @@ if.else:
   ret i64 0
 \}
 \end{Verbatim}
-  \caption{Transformation of the LPVM form of \textit{GCD} to LLVM}
+    \caption{Comparison of the LPVM form of \textit{GCD} to its LLVM form}
   \label{fig:lpvm_to_llvm}
 \end{figure}
+
+
+The LLVM target independent code generator provides numerous optimisation
+passes. While generating code, these passes can be specified by their name and
+LLVM will run them in order before generating assembly code. A curated set of
+passes selected by the LLVM team is also provided under a single compound
+pass. All of these passes can be run during code generation or on an LLVM IR
+\textit{bitcode} file using the \textit{llvm-opt} utility. Currently in our
+implementation we are using an elementary set of passes so that we can focus on
+LPVM more. For every new pass added to the Wybemk pass set, we have to ensure
+that it is not redoing the analysis LPVM has already done. Similarly, for every
+pass LPVM wants to implement, we check if LLVM already provides some equivalent
+pass.
+
 
 \section{Code generation for Wybe types with LLVM}
 \label{sec:type_codegen}
 
-LLVM provides access to the basic integer type of arbitrary bit precision. We
-are considering an \textit{int} to be of the machine word size, which is more
-commonly \textit{i32} or \textit{i64}. LLVM also has floating point
-types. Using these we can model all of Wybe's basic types as shown in
-chapter~\ref{chap:wybe}. Compound types and Abstract data types require an
-interface to the heap. An elementary way to do this is use LLVM function calls
-to make calls to C's \textit{stdlib}. Namely calls to \textit{malloc} and
-\textit{free}. LLVM's instruction \textit{getelementptr} can index allocated
-memory in the heap. But we also want to make headway into providing garbage
-collection in the compiler. Without providing a complete solution, we can still
-access dynamic garbage collection by making use of the \textit{Boehm
-  GC}. Accessing the C library version of this through the shared library we
-link in later, we can use the replacement function for \textit{malloc}, called
-\textit{gc\textunderscore malloc} to enable the Boehm garbage collector to automatically
-collect memory. To use these calls, LPVM generates \textit{foreign} calls in
-the \textit{lpvm} group: \textit{foreign lpvm alloc(8:int, x:vector)}, where
-\textit{vector} is an example new type name.
+LLVM provides access to a basic integer type of arbitrary bit precision and the
+float type. The syntax \textit{i32} represents an integer with 32 bit precision
+in LLVM. In Wybe, we are considering an \textit{int} to be of the machine word
+size, which is commonly \textit{i32} or \textit{i64}. However, the bit size of
+the standard \textit{int} type can be specified through Wybe type syntax as
+shown in Chapter~\ref{chap:wybe}. Using the basic LLVM types we can model all
+of Wybe's basic types like \textit{int}, \textit{float}, \textit{bool},
+\textit{char} .etc.
 
+Compound types and \textit{Abstract Data Types} require allocation on the heap.
 For algebraic data types, the compiler will determine the byte sizes (or word
-sizes) for every type constructor used and will generate access and mutate
-calls accordingly. Both classes of procedure calls translate to a combination
-of LLVM \textit{getelementptr}, \textit{store}, \textit{access} functions. 
+sizes) for every type constructor used and will generate \textit{access} and
+\textit{mutate} procedure calls accordingly. As mentioned in
+Chapter~\ref{chap:wybe_to_lpvm}, a Wybe type definition results in the
+generation of \textit{setter} and \textit{getter} procedures for members of
+that type. One such generation is shown in Figure~\ref{fig:procs_adt} for an
+ADT \textit{position} which represents a geometric Cartesian
+coordinate. Internally, for LLVM, the type \textit{position} will be
+represented as a pointer to a word size integer (i64* or i32*). A
+\textit{position} type pointer will point to the location where its members are
+located on the heap. The \textit{position} type constructor takes two integers
+to build itself. Wybemk determines that this needs a total of 16 bytes
+allocated on the heap, 8 for each member (assuming an int is defined as
+\textit{i32} here). In the two clauses shown for the constructor procedure for
+\textit{position}, clause 0 packs up two integers into a \textit{position} type
+and clause 1 unpacks two integers from a \textit{position} type. The
+\textit{mutate} and \textit{access} procedures pass a constant \textit{int} as
+the offset index.
+
+On the side of LLVM, the instructions \textit{getelementptr}, \textit{store},
+\textit{load} are used to index a pointer, store data using that index, and
+load data from that index respectively. The \textit{foreign} calls shown above
+all translate to some combination of these three LLVM instructions, along with
+\textit{casting} instructions. In a way, \textit{alloc}, \textit{mutate},
+\textit{access} are LPVM instructions, with their machine code provided in LLVM
+assembly. 
+
+
+\begin{figure}
+  \ruleline{Wybe}
+  \begin{minipage}{\textwidth}
+    \begin{equation*}
+      public\ type\ \mathbf{position} = public\ \mathbf{position}(x:int, y:int) end
+    \end{equation*}\\
+  \end{minipage}
+  \ruleline{LPVM}
+  \begin{minipage}{\textwidth}
+    \begin{align*}
+      0: \mathbf{posi}&\mathbf{tion}(x:int, y:int, ?out:position): \\
+          & foreign\ \mathrm{lpvm}\ \mathbf{alloc}(16:int, ?temp\#0:position) \\
+          & foreign\ \mathrm{lpvm}\ \mathbf{mutate}(temp\#0:position, ?temp\#1:position,
+            0:int, x:int) \\
+          & foreign\ \mathrm{lpvm}\ \mathbf{mutate}(temp\#1:position, ?temp\#2:position,
+            1:int, y:int) \\
+          & foreign\ \mathrm{llvm}\ \mathbf{move}(temp\#2:position,
+            ?out:position) \\ \\
+      1: \mathbf{posi}&\mathbf{tion}(?x:int, ?y:int, out:position): \\
+                      & foreign\ \mathrm{lpvm}\ \mathbf{access}(out:position,
+                        0:int, ?x:int) \\
+                      & foreign\ \mathrm{lpvm}\ \mathbf{access}(out:position,
+                        1:int, ?y:int) \\
+    \end{align*}
+  \end{minipage}
+  
+  \label{fig:procs_adt}
+  \caption{LPVM Procedures generated for an Abstract Data Type}  
+\end{figure}
+
+By default, LLVM only provides heap indexing instructions. The allocation has
+to be implemented by the programmer. An elementary way to do this is to use
+LLVM function calls to C's \textit{stdlib}, for which an object file providing
+access to this library has to be linked in later. By using calls to
+\textit{malloc} and \textit{free}, we already have a simple memory interface
+set up. These calls return a \textit{void} pointer which can be
+\textit{bitcasted} to the required pointer type using LLVM
+\textit{instructions}. The LLVM instruction \textit{getelementptr} can then
+index the heap allocated memory. With this solution, the garbage collection, or
+calling \textit{free} at the correct places, becomes a big task. Since we also
+want to make headway into providing garbage collection in the compiler, it
+would be better to have a more intelligent memory interface.
+
+Without providing a complete solution, we can still access dynamic garbage
+collection by making use of the The Boehm-Demers-Weiser conservative garbage
+collector \citep{boehmgc}. Accessing the C library version of this through the
+shared library we link in later, we can use the replacement function for
+\textit{malloc}, called \textit{gc\textunderscore malloc}, to enable the Boehm
+GC to automatically collect memory. We don't have to worry about making correct
+calls to \textit{free} anymore. To setup these calls, LPVM generates
+\textit{foreign} calls in the \textit{lpvm} group: \textit{foreign lpvm
+  alloc(8:int, x:vector)}, where \textit{vector} is an example new type name.
+
+
+\section{Linking Dependencies}
+\label{sec:linking}
+
+With LLVM we can link a transitive closure of a modules' dependencies in two
+ways: build object files for each module and use the system linker, or use the
+\textit{llvm-link} utility to link LLVM IR forms of each module together into
+one file and build a single object file of that. Since we are exploiting the
+structure of object files to support our incremental features, we are inclined
+to follow the first approach.
+
+In the current implementation we are invoking the system \textit{ld} linker
+when we have the object files ready. When the linker is given multiple object
+files to link in an executable, it expects only one of the passed object files
+to define the \textit{main} symbol. Currently modules with a non empty set of
+top level statements have a \textit{module.main} procedure defined, which is
+the entry point for that \textit{module}. This procedure should be executed
+when its module is imported into another or when it is the target
+executable. This procedure is transformed to a function of the same name in
+LLVM IR. During linking, for every module in the dependency graph, all of these
+local \textit{module.main} function bodies should be concatenated into a single
+body, in depth first order of import, and made available under the
+\textit{main} symbol of the executable object code. For example, let's assume
+we are building an executable target $foo$ and the dependency chain looks like:
+
+\begin{equation*}
+  foo \leftarrow aaa,bbb \\
+  aaa \leftarrow ccc,ddd \\
+  bbb \leftarrow ddd
+\end{equation*}
+
+The \textit{module.main} functions ($aaa.main()$, $bbb.main()$...) are
+concatenated in the order: $ccc,ddd,aaa,bbb,foo$. Notice how $ddd.main$ wasn't
+considered twice even though it would appear in the traversal twice. There is
+no need to run the initialisation code for that module twice. This concatenated
+body is put into a new temporary object file under the function name
+\textit{main} and added to the linking list so that \textit{ld} can find the
+\textit{main} symbol it needs.
+
+
+As mentioned above, apart form the Wybe object files, we are also linking in a
+C shared library. Since Wybemk is supposed to be a complete build system
+solution for Wybe, it should also be able to link in dynamic system libraries
+built with other compilers. A Wybe source module should be able to request
+linking of some external object file. This is up-coming in the future
+versions. Such a construct would also replace the need for the current C shared
+library we use. Instead, the usage of some C header/library can be explicitly
+specified, and Wybemk will search the system library paths for it. The goal is
+to keep the compiler and standard library independent. This is similar to how
+many languages provide their standard library separately from the compiler. Our
+independence also extends to the implementation of primitive types in the
+compiler. The Wybe source file of the standard library can state the size of
+\textit{ints} in bits.
+
+
+
 
 
 %%% Local Variables:

@@ -2,31 +2,49 @@
 \label{chap:lpvm}
 
 The actual implementation of the LPVM structure differs a bit from the abstract
-structure proposed in \cite{lpvm2015}. For a guard goal, the abstract
-representation results in having two clauses with the same initial sequence of
-goals up until complimentary guard goals. In the implementation however, to
-avoid duplication, there is only one clause generated. The basic clause body is
-a sequence of goals barring a guard goal. At the guard goal a fork is created
-which contains the fork condition, and a list of basic subsequent clause
-bodies, each for an outcome of the condition. A binary condition will have two
+structure proposed in \cite{lpvm2015}. When a guard goal is encountered in a
+clause body, the abstract representation rules result in another clause being
+created with the same sequence of goals up until that guard goal. In the
+implementation however, to avoid duplication, there is only one clause
+generated. Assuming that a basic clause body is the sequence of goals barring a
+guard goal, then at the guard goal a fork is created which contains the fork
+condition, and a list of subsequent basic clause bodies. Each of the basic
+clause body in the list corresponds to a different evaluation of the fork
+condition (Figure~\ref{fig:forking}). Thus, a binary condition will have two
 basic bodies in the fork list. This is similar to basic block branching in SSA,
-however the diverging branches don't need to converge in a body and hence there
-will be no need for \textit{phi} like functions.
+however the diverging branches don't need to converge into another block and
+hence there will be no need for \textit{phi} like functions.
 
-In a way LPVM procedures or predicates are polymorphic since a call to them
+The Figure~\ref{fig:lpvm_data_type} shows the algebraic data type used to hold
+the LPVM IR in the compiler implementation. This representation has Wybe
+sensitive information like Wybe types and module fields stripped away for
+easier discussion. In the implemented data type, the term \textit{Goal} is
+replaced with \textit{Prim}, for primitive. These \textit{primitive} statements
+are meant to reflect source and target code semantics. They are just procedure
+calls and the only semantic information they contain is the procedure name and
+the signature. These can be used to refer to source language procedures or
+machine code (or LLVM) instructions just as easily. Local calls look like:
+\textit{factorial(tmp\$10: int, ?tmp\$3: int)}, and foreign calls look like:
+\textit{foreign llvm mul(tmp\$2: int, 9: int, ?tmp\$3: int)}, where the term
+\textit{llvm} specifies the group which can possibly provide an instruction for
+the call. The compiler will decide what code to generate for a given
+\textit{Prim}.
+
+In a way, LPVM procedures or predicates are polymorphic since a call to them
 will execute any one of the clauses under them. There can be a \textit{Clause}
-for different modes of the procedure parameters. For example, the procedure
-\( - \) can have clauses \( -(a, b, ?c) \) and \( -(a, ?b, c) \), marking
-different operand positions as outputs. Even though each of the clause
-functions in a single mode, a procedure can be made to exhibit multiple modes
-of a logic programming language. This construct is very similar to the
-polymorphism Wybe has to offer, and is such this construct directly enables it
-it. 
+created for a different combination of modes of the procedure parameters. For
+example, the procedure \( - \) can have clauses \( -(a, b, ?c) \) and
+\( -(a, ?b, c) \), marking different operand positions as outputs. Even though
+each of the clause functions in a single mode, a procedure can be made to
+exhibit multiple modes of a logic programming language. This construct is very
+similar to the polymorphism Wybe has to offer, and as such this construct
+directly enables it it.
 
 
 \begin{figure}
   \centering
-  \begin{tabular}{l@{\hskip 1in} l}
+  \begin{tabular}{l@{\hskip 1in} | l}
+    \textit{pseudo code} & \textit{lpvm} \\ \hline
     \( x0 = x1 + x3 \)              & \( wybe.int.+(x1, x3, ?x0) \) \\
     \( if\ (x0 > 0)\ left\ right \) & \( wybe.int.>(x0,\ 0,\ ?tmp1) \) \\
                                     & \( case\ tmp1\ of \) \\
@@ -35,8 +53,8 @@ it.
     
 
   \end{tabular}
-  \\
-  \caption{SSA statement and their equivalent LPVM goals}
+  \label{fig:forking}
+  \caption{Forking in the \textit{Clause} on a \textit{Guard} conditional}
 \end{figure}
 
 \begin{figure}
@@ -78,36 +96,24 @@ d
      $ \mathbf{proc}\ break1\ $ & $\rightarrow$ & $ d\ \mathbf{end} $ \\
     \end{tabular}
   \end{minipage}
-  \caption{LPVM Procedures generated for an Imperative Loop}
+  \caption{LPVM Procedures generated for an imperative loop}
   \label{fig:loop_lpvm}
 \end{figure}
 
 
-The Figure~\ref{fig:lpvm_data_type} shows the algebraic data type used to hold
-the LPVM IR. This representation has Wybe sensitive information like Wybe types
-and module fields stripped away for easier discussion. In the implemented data
-type, the term \textit{Goal} is replaced with \textit{Prim}, for
-primitive. These primitive statements are meant to reflect source and target
-code semantics. They are just procedure calls and the only semantic information
-they contain are the procedure name and the signature. These can be used to
-refer to source language procedures or machine code (or LLVM) instructions just
-as easily. Local calls look like: \textit{factorial(tmp\$10: int, ?tmp\$3:
-  int)}, and foreign calls look like: \textit{foreign llvm mul(tmp\$2: int, 9:
-  int, ?tmp\$3: int)}, where the term \textit{llvm} specifies the group which
-can possibly provide an instruction for the call. The compiler will decide what
-code to generate for a given \textit{Prim}.
-
 Conditional statements or goals partition a clause body as discussed above. But
-a loop conditional can't just do that as it would require a a jump back into a
-previous body. LPVM does not have these, and in fact these are part of the SSA
-drawbacks it wants to avoid. Loops are un-branched by generating new procedures
-which are involved in recursive calls. The calls are tail calls and hence the
-code generation will have to ensure tail call optimisation is
-enabled. A procedure will be generated for the loop body primitives which ends
-up calling itself recursively, and another generated procedure will contain the
-body which comes after the loop. The clause body that the loop was a statement
-in originally will end with a call to the former. There would also be a
-breaking conditional call to the latter.
+a loop conditional can't just do that as it would require a jump back into a
+previous body at the end of an iteration. LPVM does not have these, and in fact
+these are part of the SSA drawbacks it wants to avoid. Loops are un-branched by
+generating new procedures which are involved in recursive calls. The calls are
+tail calls and hence the code generation will have to ensure that the tail call
+optimisation is enabled. There are two new procedures generated in the
+un-branching: The first will contain the loop body primitives and will end up
+calling itself for iteration. The second will contain the body primitives which
+comes after the loop. The clause body that the loop was a statement in
+originally will end with a call to the first generated procedure. The first
+procedure, in turn, will contain a breaking conditional or guard to call the
+second generated procedure.
 
 If we consider \textit{a}, \textit{b}, \textit{c}, \textit{d} as a
 representation for one or more body statements or primitives, a looping
@@ -120,7 +126,56 @@ conditional breaking is shown in Figure~\ref{fig:loop_lpvm}. The guard goal(s)
 the remaining body of the loop after the condition. The conditional inside the
 loop split the generated procedure \textit{next1} into \textit{gen1} and
 \textit{gen2}. As shown above, in the implementation the two clauses of
-\textit{gen2} will be present in a \textit{Fork} based on the value of \textit{b}.
+\textit{gen2} will be present in a \textit{Fork} based on the value of
+\textit{b}. The original loop statement will now just be a call to
+\textit{next1}. Since LPVM procedures support multiple output, we can have the
+same scoped variables which came out of the loop block as the outputs in
+\textit{next1}.
 
 
+\begin{figure}
+  \noindent
+  \begin{minipage}{0.2\textwidth}
+    \begin{align*}
+      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b \neq 0 \\
+                    &\wedge mod(a,b,?b') \\
+                    &\wedge gcd(b,b',?ret) \\
+      \\
+      gcd(a,b,?ret) &\rightarrow \mathbf{guard}\ b == 0 \\
+                    &\wedge ret=a \\
+    \end{align*}
+  \end{minipage}
+  \qquad\vrule
+  \begin{minipage}{0.4\textwidth}
+        \begin{align*}
+      \mathbf{gc}&\mathbf{d}(a,b,?ret) \rightarrow \\
+          & foreign\ \mathbf{llvm}\ \mathrm{icmp}\ \mathrm{ne}(b,0,?tmp1) \\
+          & case\ \mathrm{tmp1}\ of \\
+      0:\ & foreign\ \mathbf{llvm}\ \mathrm{move}(0,?ret) \\
+      1:\ & foreign\ \mathbf{llvm}\ \mathrm{urem}(a,b,?b') \\
+          &  gcd(a,b',?ret) \\
+    \end{align*}
 
+    \end{minipage}
+
+    \caption{Comparing the clause form of GCD (left) with its actual LPVM
+      implementation (right)}
+    \label{fig:gcd_full_imp}
+\end{figure}
+
+
+%Conclusion paragraph?
+Figure~\ref{fig:gcd_full_imp} shows the implemented LPVM version of the
+\textit{gcd} function we saw earlier. On the left is the abstract form
+representation, and on the right is how it looks like in the actual
+implementation. The optimisation and analysis methods given in \cite{lpvm2015}
+are still possible for the above implemented structure. The LPVM structure also
+does not define a fixed instruction set, in fact its instruction set is being
+provided by LLVM. LPVM exists as an important glue structure between Wybe and
+machine instructions in the form of LLVM.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:

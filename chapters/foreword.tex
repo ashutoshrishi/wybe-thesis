@@ -1,0 +1,25 @@
+\chapter*{Foreword}
+
+I want to thank Dr. Peter Schachte for giving me the opportunity to work with
+him on his pet project, the Wybe language and compiler. It is a great learning
+experience and immense fun. I wanted to use this section to highlight my exact
+contributions to this compiler code base, since it was already well under
+construction before I started my research project, and the discussion in this
+thesis covers more than just my contributions.
+
+I joined the compiler project at the stage when the entire front-end and LPVM
+Intermediate Representation transformation was already in place. Since then, I
+have worked on extending the compiler code base to include translation of the
+logic IR, LPVM, to the LLVM IR and the machine code generation from that. With
+the guidance of Dr. Schachte, I have also been working on adding the
+incremental features, discussed in this thesis, into the compiler, including
+the work on the build system. Essentially our work flow is divided at the LPVM
+IR stage. Dr. Schachte works on extending the language and its translation to
+LPVM, whereas I work on the rest of the back-end stages thereafter,
+incorporating his changes and extending the incremental features.
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "../thesis"
+%%% End:
